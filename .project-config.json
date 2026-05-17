@@ -1,0 +1,43 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [
+    "server",
+    "db",
+    "user"
+  ],
+  "dev_command": "pnpm run dev",
+  "env_vars": {
+    "DATABASE_URL": "mysql://3sCpuCFr3kWQAN5.root:Acw2bW5jQtDgj96cv80u@gateway06.us-east-1.prod.aws.tidbcloud.com:4000/iBqgyZMQbwrZ7zH24tokWb?ssl={\"rejectUnauthorized\":true}"
+  },
+  "experiments": [
+    "no_db_push"
+  ],
+  "git_remote": {
+    "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663664798367/iBqgyZMQbwrZ7zH24tokWb",
+    "access_key_id": "ASIAZV3A2ECZAMO3UMVG",
+    "secret_access_key": "7JCnNYKLEHNHoB2+p66N3RAbbyUgH1hKrs0bj3WU",
+    "session_token": "IQoJb3JpZ2luX2VjEOf//////////wEaCXVzLWVhc3QtMSJGMEQCIBYoiznq/l0vnTIZmHhgxuQEE9SavYzqfqnbyGEppi9hAiBjY8VHr6/BRKR0TeG3B6gghxmiUf09bG6LL3uIRvJTHyr/Awiw//////////8BEAQaDDY2NTM4NjA5ODg2NiIM00T6prSzTLnT3e8yKtMDSeSPk786Z+7hg+eyV2qf0kIuNoEfJFTet3js537yhk2UESi6N72P4cy6JfLayXDk2AXTrU3SK/t72KSEsDzFql64PXdR9Za3MhtLNy8BsDDqAYF9eBkpuhj0e2ngWP98p4xgeI9M2KXhevFTYiydV48jcuVwbO/5HI4Mq0uhyStAKExoDQbcccG3YPxGq3bj8HhoWw4hSypWqnTosW02NpYsaDPObdlfvHirhrixL9MJvqQyMQSR0x+30y0AvmXSQRL68htViGqbvILqYajR0HGVswztcLDn3YmFYZuygiB8FI751THtF8R06hejH22/5GNu0sc56cae1MNj9KalwFhodG7s3efuN5FX6IeZoJp+OxJhDnTHJGcXILx3q8oOCkXmZg3BXPLdM2c3Yls+FaQmbDEO9Ag5o0ZIjHYgX6bJeveDScsevaPeK7TZK+DgZG4gHwxVCX7vk4D1hjZK3tIPqOe6vsKOnex0vaA4YOmdCG7C/xCVO2FcAzH8gNwyuAiPGyAcSTCJ6oAWrrZBYUJbXjm8p7BeJjdMW/bO51vbUgUVapM7qlb872dCFG4iWAG6t6a6/gUH8l/JJLF/Leokx1Pv3KYkQDE/2iCDRcPUGiQw+oOp0AY6ngEZWTMcVh6AoLRsmbw/7CXp175TQWM3NeSmfOaZzURWZrEEMOucFkMFkOzvW+nGb8TnPFFdtSmZYwvHYcYP9KgGWwGcgp3HlAe3msSzFEdQngAMmRkIwj4UX0Y5+ERH14ZUhhLpKASYlxl01lcVtXRwx9TCE0cSh81KyHV+4zbZFn0vxA8yx2MsPky74La1402YS1xmtYO/fu7Z5LYJWw==",
+    "expiration": "2026-05-18T10:32:26.000Z"
+  },
+  "name": "portal-ativa",
+  "path": "/home/ubuntu/portal-ativa",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "NcWnFSYr9A5qERyYAcWkM2",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "JWT_SECRET": "k5QR2s3aBc2hYUWrA7zjbx",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "Alexandre Laudimiro",
+    "OWNER_OPEN_ID": "AgVnnZArudg39j7HQtAFW8",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "7addf506-f116-41ae-bf32-2f27d224d672",
+    "VITE_APP_ID": "iBqgyZMQbwrZ7zH24tokWb",
+    "VITE_APP_LOGO": "https://files.manuscdn.com/user_upload_by_module/web_dev_logo/310519663664798367/sViRfPJeyOwdPnOr.png",
+    "VITE_APP_TITLE": "Portal Ativa",
+    "VITE_FRONTEND_FORGE_API_KEY": "9uYNDJagBpxtNzkMjdVU3T",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-db-user",
+  "test_command": "pnpm test"
+}
