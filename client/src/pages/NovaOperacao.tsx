@@ -444,6 +444,14 @@ function Etapa2DadosOperacao({
 
 // ─── Etapa 3: Documentos ──────────────────────────────────────────────────────
 
+// Tipo para arquivo local antes do upload
+interface ArquivoLocal {
+  id: string; // uuid local
+  file: File;
+  status: "pendente" | "enviando" | "enviado" | "erro";
+  erro?: string;
+}
+
 function Etapa3Documentos({
   codigoOperacao,
   produto,
@@ -463,50 +471,118 @@ function Etapa3Documentos({
     { enabled: !!operacaoId }
   );
   const uploadMutation = trpc.documentos.upload.useMutation();
+
+  // Mapa docId -> lista de arquivos locais (fila de upload)
+  const [filaArquivos, setFilaArquivos] = useState<Record<number, ArquivoLocal[]>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
-  const [uploading, setUploading] = useState<Record<number, boolean>>({});
 
   const enviados = documentos?.filter((d) => d.estado !== "Pendente") ?? [];
   const total = documentos?.length ?? 0;
   const progresso = total > 0 ? Math.round((enviados.length / total) * 100) : 0;
 
-  const handleUpload = useCallback(
-    async (doc: { id: number; nomeDocumento: string; categoria: string }, file: File) => {
+  // Envia um arquivo da fila
+  const uploadArquivo = useCallback(
+    async (
+      doc: { id: number; nomeDocumento: string; categoria: string },
+      arquivo: ArquivoLocal
+    ) => {
       if (!operacaoId) return;
-      if (file.size > 16 * 1024 * 1024) { toast.error("Arquivo muito grande (máx. 16MB)"); return; }
-      setUploading((u) => ({ ...u, [doc.id]: true }));
+      if (arquivo.file.size > 16 * 1024 * 1024) {
+        setFilaArquivos((prev) => ({
+          ...prev,
+          [doc.id]: (prev[doc.id] ?? []).map((a) =>
+            a.id === arquivo.id ? { ...a, status: "erro" as const, erro: "Arquivo muito grande (máx. 16MB)" } : a
+          ),
+        }));
+        toast.error(`${arquivo.file.name}: muito grande (máx. 16MB)`);
+        return;
+      }
+      // Marcar como enviando
+      setFilaArquivos((prev) => ({
+        ...prev,
+        [doc.id]: (prev[doc.id] ?? []).map((a) =>
+          a.id === arquivo.id ? { ...a, status: "enviando" as const } : a
+        ),
+      }));
       try {
-        const base64 = await fileToBase64(file);
+        const base64 = await fileToBase64(arquivo.file);
         await uploadMutation.mutateAsync({
           operacaoId,
           documentoId: doc.id,
           nomeDocumento: doc.nomeDocumento,
           categoria: doc.categoria,
           fileBase64: base64,
-          fileName: file.name,
-          mimeType: file.type,
+          fileName: arquivo.file.name,
+          mimeType: arquivo.file.type,
         });
-        toast.success(`${doc.nomeDocumento} enviado!`);
+        setFilaArquivos((prev) => ({
+          ...prev,
+          [doc.id]: (prev[doc.id] ?? []).map((a) =>
+            a.id === arquivo.id ? { ...a, status: "enviado" as const } : a
+          ),
+        }));
         refetch();
       } catch (err: any) {
-        toast.error("Erro no upload: " + err.message);
-      } finally {
-        setUploading((u) => ({ ...u, [doc.id]: false }));
+        setFilaArquivos((prev) => ({
+          ...prev,
+          [doc.id]: (prev[doc.id] ?? []).map((a) =>
+            a.id === arquivo.id ? { ...a, status: "erro" as const, erro: err.message } : a
+          ),
+        }));
+        toast.error(`Erro ao enviar ${arquivo.file.name}: ${err.message}`);
       }
     },
     [operacaoId, uploadMutation, refetch]
   );
 
+  // Adiciona arquivos selecionados à fila e inicia upload de cada um
+  const handleFilesSelected = useCallback(
+    async (
+      doc: { id: number; nomeDocumento: string; categoria: string },
+      files: FileList
+    ) => {
+      if (!operacaoId) return;
+      const novosArquivos: ArquivoLocal[] = Array.from(files).map((file) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        status: "pendente" as const,
+      }));
+      setFilaArquivos((prev) => ({
+        ...prev,
+        [doc.id]: [...(prev[doc.id] ?? []), ...novosArquivos],
+      }));
+      // Envia em sequencia para não sobrecarregar
+      for (const arquivo of novosArquivos) {
+        await uploadArquivo(doc, arquivo);
+      }
+    },
+    [operacaoId, uploadArquivo]
+  );
+
+  // Remove arquivo da fila local (apenas os ainda não enviados ou com erro)
+  const removerArquivo = (docId: number, arquivoId: string) => {
+    setFilaArquivos((prev) => ({
+      ...prev,
+      [docId]: (prev[docId] ?? []).filter((a) => a.id !== arquivoId),
+    }));
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-1">Documentos — {produto}</h2>
-        <p className="text-sm text-muted-foreground">Envie os documentos do checklist para continuar</p>
+        <p className="text-sm text-muted-foreground">Envie os documentos do checklist. Você pode anexar mais de um arquivo por item.</p>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{enviados.length} de {total} documentos enviados</span>
+          <span className="text-muted-foreground">{enviados.length} de {total} itens com arquivo enviado</span>
           <span className={cn("font-semibold", progresso === 100 ? "text-emerald-400" : "text-primary")}>{progresso}%</span>
         </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -514,32 +590,102 @@ function Etapa3Documentos({
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {!documentos ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
             <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
             Carregando checklist...
           </div>
         ) : documentos.map((doc) => {
-          const isUploading = uploading[doc.id];
+          const arquivosDoc = filaArquivos[doc.id] ?? [];
+          const temEnviados = arquivosDoc.filter((a) => a.status === "enviado").length;
+          const temEnviando = arquivosDoc.some((a) => a.status === "enviando");
           const isEnviado = doc.estado !== "Pendente";
           return (
-            <div key={doc.id} className={cn("flex items-center justify-between p-3 rounded-lg border transition-colors", isEnviado ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/40 bg-muted/10 hover:border-primary/30")}>
-              <div className="flex items-center gap-3 min-w-0">
-                {isEnviado ? <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" /> : <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />}
-                <div className="min-w-0">
-                  <p className="text-sm text-foreground truncate">{doc.nomeDocumento}</p>
-                  <p className="text-xs text-muted-foreground">{doc.categoria}</p>
+            <div key={doc.id} className={cn(
+              "rounded-lg border transition-colors",
+              isEnviado ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/40 bg-muted/10 hover:border-primary/30"
+            )}>
+              {/* Linha principal do item */}
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {isEnviado
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    : <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />}
+                  <div className="min-w-0">
+                    <p className="text-sm text-foreground truncate">{doc.nomeDocumento}</p>
+                    <p className="text-xs text-muted-foreground">{doc.categoria}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isEnviado && temEnviados === 0 && (
+                    <span className="text-xs text-emerald-400 hidden sm:block">Enviado</span>
+                  )}
+                  {temEnviados > 0 && (
+                    <span className="text-xs text-emerald-400 hidden sm:block">{temEnviados} arquivo{temEnviados > 1 ? "s" : ""} enviado{temEnviados > 1 ? "s" : ""}</span>
+                  )}
+                  {/* Input oculto com multiple */}
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
+                    multiple
+                    className="hidden"
+                    ref={(el) => { fileInputRefs.current[doc.id] = el; }}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        handleFilesSelected(doc, e.target.files);
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fileInputRefs.current[doc.id]?.click()}
+                    disabled={temEnviando}
+                    className={cn(
+                      "gap-1.5 text-xs",
+                      isEnviado && "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                    )}
+                  >
+                    {temEnviando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                    {isEnviado || temEnviados > 0 ? "Adicionar arquivos" : "Enviar"}
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {isEnviado && <span className="text-xs text-emerald-400 hidden sm:block">Enviado</span>}
-                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" ref={(el) => { fileInputRefs.current[doc.id] = el; }} onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(doc, file); }} />
-                <Button size="sm" variant="outline" onClick={() => fileInputRefs.current[doc.id]?.click()} disabled={isUploading} className={cn("gap-1.5 text-xs", isEnviado && "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10")}>
-                  {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                  {isEnviado ? "Reenviar" : "Enviar"}
-                </Button>
-              </div>
+
+              {/* Lista de arquivos anexados */}
+              {arquivosDoc.length > 0 && (
+                <div className="px-3 pb-3 space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Arquivos enviados</p>
+                  {arquivosDoc.map((arq) => (
+                    <div key={arq.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-background/60 border border-border/30">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {arq.status === "enviando" && <Loader2 className="w-3 h-3 animate-spin text-primary flex-shrink-0" />}
+                        {arq.status === "enviado" && <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />}
+                        {arq.status === "erro" && <AlertTriangle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+                        {arq.status === "pendente" && <div className="w-3 h-3 rounded-full border border-muted-foreground/30 flex-shrink-0" />}
+                        <span className="text-xs text-foreground truncate max-w-[180px]">{arq.file.name}</span>
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0">{formatBytes(arq.file.size)}</span>
+                        {arq.status === "erro" && arq.erro && (
+                          <span className="text-[10px] text-red-400 truncate">{arq.erro}</span>
+                        )}
+                      </div>
+                      {arq.status !== "enviando" && (
+                        <button
+                          onClick={() => removerArquivo(doc.id, arq.id)}
+                          className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0 p-0.5"
+                          title="Remover"
+                        >
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
