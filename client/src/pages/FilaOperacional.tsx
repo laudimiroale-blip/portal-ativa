@@ -71,14 +71,12 @@ export default function FilaOperacional() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {slaAlerts?.map((op) => (
-                <Link key={op.id} href={`/operacoes/${op.id}`}>
-                  <a className="flex items-center justify-between p-2.5 bg-red-500/5 border border-red-500/20 rounded-md hover:border-red-500/40 transition-colors">
+                <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2.5 bg-red-500/5 border border-red-500/20 rounded-md hover:border-red-500/40 transition-colors">
                     <div>
                       <span className="text-xs font-mono text-red-400">{op.codigoOperacao}</span>
                       <p className="text-xs text-foreground mt-0.5 truncate max-w-[140px]">{op.nomeCliente}</p>
                     </div>
                     <SlaAlertBadge label={formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR })} />
-                  </a>
                 </Link>
               ))}
             </div>
@@ -94,14 +92,12 @@ export default function FilaOperacional() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {urgentes.map((op) => (
-                <Link key={op.id} href={`/operacoes/${op.id}`}>
-                  <a className="flex items-center justify-between p-2.5 bg-orange-500/5 border border-orange-500/20 rounded-md hover:border-orange-500/40 transition-colors">
+                <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2.5 bg-orange-500/5 border border-orange-500/20 rounded-md hover:border-orange-500/40 transition-colors">
                     <div>
                       <span className="text-xs font-mono text-orange-400">{op.codigoOperacao}</span>
                       <p className="text-xs text-foreground mt-0.5 truncate max-w-[140px]">{op.nomeCliente}</p>
                     </div>
                     <PrioridadeBadge prioridade={op.prioridade} />
-                  </a>
                 </Link>
               ))}
             </div>
@@ -130,8 +126,7 @@ export default function FilaOperacional() {
                     <div className="text-center py-4 text-muted-foreground text-xs">Nenhuma operação</div>
                   ) : (
                     grupo.operacoes.map((op) => (
-                      <Link key={op.id} href={`/operacoes/${op.id}`}>
-                        <a className={cn(
+                      <Link key={op.id} href={`/operacoes/${op.id}`} className={cn(
                           "block p-2.5 rounded-md border transition-colors hover:border-primary/30",
                           slaIds.has(op.id)
                             ? "bg-red-500/5 border-red-500/20"
@@ -152,7 +147,6 @@ export default function FilaOperacional() {
                           {slaIds.has(op.id) && (
                             <SlaAlertBadge label="SLA" className="mt-1.5" />
                           )}
-                        </a>
                       </Link>
                     ))
                   )}

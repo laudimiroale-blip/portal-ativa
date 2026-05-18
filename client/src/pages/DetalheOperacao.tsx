@@ -63,7 +63,7 @@ export default function DetalheOperacao({ params }: Props) {
       <AtivaDashboardLayout>
         <div className="p-6 text-center text-muted-foreground">
           <p>Operação não encontrada.</p>
-          <Link href="/operacoes"><a className="text-primary hover:underline mt-2 block">Voltar às operações</a></Link>
+          <Link href="/operacoes" className="text-primary hover:underline mt-2 block">Voltar às operações</Link>
         </div>
       </AtivaDashboardLayout>
     );
@@ -75,10 +75,8 @@ export default function DetalheOperacao({ params }: Props) {
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <Link href="/operacoes">
-              <a className="p-2 mt-0.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <Link href="/operacoes" className="p-2 mt-0.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
                 <ArrowLeft className="w-4 h-4" />
-              </a>
             </Link>
             <div>
               <div className="flex items-center gap-2 flex-wrap">

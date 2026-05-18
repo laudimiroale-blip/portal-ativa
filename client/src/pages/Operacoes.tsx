@@ -74,11 +74,9 @@ export default function Operacoes() {
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
               )}
             </button>
-            <Link href="/operacoes/nova">
-              <a className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+            <Link href="/operacoes/nova" className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
                 <Plus className="w-4 h-4" />
                 Nova
-              </a>
             </Link>
           </div>
         </div>
@@ -200,19 +198,15 @@ export default function Operacoes() {
                   {operacoes?.map((op) => (
                     <tr key={op.id} className="hover:bg-accent/30 transition-colors cursor-pointer group">
                       <td className="px-4 py-3">
-                        <Link href={`/operacoes/${op.id}`}>
-                          <a className="flex items-center gap-2">
+                        <Link href={`/operacoes/${op.id}`} className="flex items-center gap-2">
                             <span className="font-mono text-xs text-primary">{op.codigoOperacao}</span>
                             {op.statusRascunho && <RascunhoBadge />}
-                          </a>
                         </Link>
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/operacoes/${op.id}`}>
-                          <a>
                             <p className="font-medium text-foreground group-hover:text-primary transition-colors">{op.nomeCliente}</p>
                             <p className="text-xs text-muted-foreground">{op.cpf}</p>
-                          </a>
                         </Link>
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">

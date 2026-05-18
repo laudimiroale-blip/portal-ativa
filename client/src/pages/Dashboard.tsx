@@ -101,8 +101,7 @@ function DashboardAdmin() {
           </div>
           <div className="space-y-2">
             {slaAlerts?.slice(0, 5).map((op) => (
-              <Link key={op.id} href={`/operacoes/${op.id}`}>
-                <a className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/20 rounded-md hover:border-red-500/40 transition-colors">
+              <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/20 rounded-md hover:border-red-500/40 transition-colors">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono text-red-400">{op.codigoOperacao}</span>
                     <span className="text-sm text-foreground">{op.nomeCliente}</span>
@@ -112,7 +111,6 @@ function DashboardAdmin() {
                     <SlaAlertBadge label={`Parado há ${formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR })}`} />
                     <PrioridadeBadge prioridade={op.prioridade} />
                   </div>
-                </a>
               </Link>
             ))}
           </div>
@@ -211,9 +209,7 @@ function DashboardAdmin() {
             <Clock className="w-4 h-4 text-primary" />
             Movimentações Recentes
           </h2>
-          <Link href="/operacoes">
-            <a className="text-xs text-primary hover:underline">Ver todas</a>
-          </Link>
+          <Link href="/operacoes" className="text-xs text-primary hover:underline">Ver todas</Link>
         </div>
         <div className="space-y-2">
           {loadingOps ? (
@@ -222,8 +218,7 @@ function DashboardAdmin() {
             ))
           ) : (
             operacoes?.slice(0, 6).map((op) => (
-              <Link key={op.id} href={`/operacoes/${op.id}`}>
-                <a className="flex items-center justify-between p-2.5 rounded-md hover:bg-accent/50 transition-colors group">
+              <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2.5 rounded-md hover:bg-accent/50 transition-colors group">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-[11px] font-mono text-muted-foreground flex-shrink-0">{op.codigoOperacao}</span>
                     <span className="text-sm text-foreground truncate">{op.nomeCliente}</span>
@@ -232,7 +227,6 @@ function DashboardAdmin() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <StatusBadge status={op.statusMacro} />
                   </div>
-                </a>
               </Link>
             ))
           )}
@@ -295,14 +289,12 @@ function DashboardAssessor() {
           </h2>
           <div className="space-y-2">
             {pendentes.map((op) => (
-              <Link key={op.id} href={`/operacoes/${op.id}`}>
-                <a className="flex items-center justify-between p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md hover:border-yellow-500/40 transition-colors">
+              <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-md hover:border-yellow-500/40 transition-colors">
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono text-muted-foreground">{op.codigoOperacao}</span>
                     <span className="text-sm text-foreground">{op.nomeCliente}</span>
                   </div>
                   <StatusBadge status={op.statusMacro} />
-                </a>
               </Link>
             ))}
           </div>
@@ -316,9 +308,7 @@ function DashboardAssessor() {
             <FolderOpen className="w-4 h-4 text-primary" />
             Minhas Operações
           </h2>
-          <Link href="/operacoes">
-            <a className="text-xs text-primary hover:underline">Ver todas</a>
-          </Link>
+          <Link href="/operacoes" className="text-xs text-primary hover:underline">Ver todas</Link>
         </div>
         <div className="space-y-2">
           {isLoading ? (
@@ -329,14 +319,11 @@ function DashboardAssessor() {
             <div className="text-center py-8 text-muted-foreground text-sm">
               <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
               Nenhuma operação encontrada.
-              <Link href="/operacoes/nova">
-                <a className="block mt-2 text-primary hover:underline">Criar primeira operação</a>
-              </Link>
+              <Link href="/operacoes/nova" className="block mt-2 text-primary hover:underline">Criar primeira operação</Link>
             </div>
           ) : (
             operacoes?.slice(0, 8).map((op) => (
-              <Link key={op.id} href={`/operacoes/${op.id}`}>
-                <a className="flex items-center justify-between p-2.5 rounded-md hover:bg-accent/50 transition-colors">
+              <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2.5 rounded-md hover:bg-accent/50 transition-colors">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className="text-[11px] font-mono text-muted-foreground flex-shrink-0">{op.codigoOperacao}</span>
                     <span className="text-sm text-foreground truncate">{op.nomeCliente}</span>
@@ -346,7 +333,6 @@ function DashboardAssessor() {
                     <PrioridadeBadge prioridade={op.prioridade} />
                     <StatusBadge status={op.statusMacro} />
                   </div>
-                </a>
               </Link>
             ))
           )}
