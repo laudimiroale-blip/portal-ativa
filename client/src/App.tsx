@@ -5,33 +5,43 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import Dashboard from "./pages/Dashboard";
+import Operacoes from "./pages/Operacoes";
+import NovaOperacao from "./pages/NovaOperacao";
+import DetalheOperacao from "./pages/DetalheOperacao";
+import FilaOperacional from "./pages/FilaOperacional";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/" component={Home} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/operacoes" component={Operacoes} />
+      <Route path="/operacoes/nova" component={NovaOperacao} />
+      <Route path="/operacoes/:id" component={DetalheOperacao} />
+      <Route path="/fila" component={FilaOperacional} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
-          <Toaster />
+          <Toaster
+            theme="dark"
+            position="top-right"
+            toastOptions={{
+              style: {
+                background: "oklch(11% 0 0)",
+                border: "1px solid oklch(20% 0 0)",
+                color: "oklch(98% 0 0)",
+              },
+            }}
+          />
           <Router />
         </TooltipProvider>
       </ThemeProvider>
