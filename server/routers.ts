@@ -403,25 +403,91 @@ export const appRouter = router({
           alteradoPor: user.id,
         });
 
-        const docsInfo = docs.map((d) => ({
-          id: d.id,
-          nome: d.nomeDocumento,
-          categoria: d.categoria,
-          estado: d.estado,
-          temArquivo: !!d.arquivoUrl,
-        }));
+        const docsEnviados = docs.filter((d) => d.arquivoUrl);
+        const docsPendentes = docs.filter((d) => !d.arquivoUrl);
 
-        const systemPrompt = `Você é um assistente de validação documental da Ativa Soluções, especializado em crédito com garantia real.
-PAPEL: Validar documentos enviados para operações de crédito. A aprovação final permanece com o analista humano.
-AO RECEBER DOCUMENTOS: (1) Confirme se o documento é o que se declara ser. (2) Sinalize: ilegível, vencido, inconsistente, documento incorreto. (3) Extraia dados relevantes. (4) Atribua semáforo: verde (ok) / amarelo (atenção) / vermelho (problema).
-RETORNE JSON com array "documentos" onde cada item tem: { "id": number, "nome": string, "semaforo": "verde"|"amarelo"|"vermelho", "observacao": string, "dados_extraidos": {} }
-REGRAS: NUNCA invente dados. Objetivo e técnico. Responda APENAS com JSON válido.`;
+        const systemPrompt = `Você é um Analista Documental Sênior da Ativa Soluções, especializado em crédito com garantia real (Home Equity, Auto Equity, Rural Equity, Imóvel em Construção).
 
-        const userMessage = `Analise os seguintes documentos da operação ${op.codigoOperacao} (${op.produto}):
-Cliente: ${op.nomeCliente}
-Documentos: ${JSON.stringify(docsInfo, null, 2)}
+SUA MISSÃO: Realizar conferência documental completa e rigorosa da operação de crédito.
 
-Retorne análise JSON para cada documento.`;
+ANALISE CADA DOCUMENTO E VERIFIQUE:
+1. Tipo e correspondência: o documento é realmente o que se declara ser?
+2. Legibilidade: está legível, sem cortes, sem partes ilegíveis?
+3. Validade: está dentro do prazo de validade? (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
+4. Correspondência ao titular: pertence ao tomador ou cônjuge declarado?
+5. Completude: está completo ou faltam páginas?
+6. Consistência: dados batem com o restante da operação?
+
+SEMÁFORO:
+- verde: documento válido, legível, completo e dentro do prazo
+- amarelo: documento presente mas com ressalva (data próxima do vencimento, qualidade reduzida, dado não confirmado)
+- vermelho: documento ausente, vencido, ilegível, incorreto ou inconsistente
+
+RETORNE JSON ESTRITAMENTE NESTE FORMATO:
+{
+  "documentos": [
+    {
+      "id": number,
+      "nome": string,
+      "semaforo": "verde" | "amarelo" | "vermelho",
+      "observacao": string,
+      "dados_extraidos": {
+        "tipo_identificado": string,
+        "titular_identificado": string | null,
+        "data_emissao": string | null,
+        "validade": string | null,
+        "numero_documento": string | null
+      }
+    }
+  ],
+  "pendencias": [string],
+  "documentos_ausentes": [string],
+  "situacao_geral": "Completa" | "Pendente" | "Crítica",
+  "resumo_documental": string
+}
+
+REGRAS ABSOLUTAS:
+- NUNCA invente dados não presentes nos documentos
+- Se não conseguir identificar um dado, use null
+- Seja objetivo e técnico
+- Responda APENAS com JSON válido, sem markdown`;
+
+        const contentParts: any[] = [
+          {
+            type: "text",
+            text: `Realize a conferência documental completa da operação ${op.codigoOperacao}.
+
+INFORMAÇÕES DA OPERAÇÃO:
+- Produto: ${op.produto}
+- Cliente/Tomador: ${op.nomeCliente} (CPF: ${op.cpf})
+- Cônjuge: ${op.nomeConjuge ? `${op.nomeConjuge} (CPF: ${op.cpfConjuge})` : "Não informado"}
+- Estado Civil: ${op.estadoCivil}
+- Valor Solicitado: R$ ${Number(op.valorSolicitado).toLocaleString("pt-BR")}
+- Prazo: ${op.prazo} meses
+- Finalidade: ${op.finalidade ?? "Não informada"}
+- Contexto: ${op.contextoOperacao ?? "Não informado"}
+
+DOCUMENTOS DO CHECKLIST (${docs.length} itens):
+${docs.map((d) => `- [${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}] ID:${d.id} | ${d.nomeDocumento} (${d.categoria}) | Estado: ${d.estado}`).join("\n")}
+
+DOCUMENTOS PENDENTES (sem arquivo): ${docsPendentes.map((d) => d.nomeDocumento).join(", ") || "Nenhum"}
+
+Analise cada documento enviado e identifique pendências.`,
+          },
+        ];
+
+        const docsComArquivo = docsEnviados.slice(0, 10);
+        for (const doc of docsComArquivo) {
+          if (doc.arquivoUrl) {
+            const mimeType = doc.arquivoUrl.toLowerCase().includes(".pdf") ? "application/pdf" : undefined;
+            if (mimeType) {
+              contentParts.push({ type: "file_url", file_url: { url: doc.arquivoUrl, mime_type: mimeType } });
+            } else {
+              contentParts.push({ type: "image_url", image_url: { url: doc.arquivoUrl, detail: "high" } });
+            }
+            contentParts.push({ type: "text", text: `[Documento acima: ID=${doc.id} | ${doc.nomeDocumento} | Categoria: ${doc.categoria}]` });
+          }
+        }
 
         const inicio = Date.now();
         let analiseId: number | undefined;
@@ -434,7 +500,7 @@ Retorne análise JSON para cada documento.`;
           const response = await invokeLLM({
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage },
+              { role: "user", content: contentParts },
             ],
             response_format: { type: "json_object" } as any,
           });
@@ -459,8 +525,8 @@ Retorne análise JSON para cada documento.`;
           }
 
           const docs_result = resultadoJson.documentos ?? [];
-          const temProblema = docs_result.some((d: any) => d.semaforo === "vermelho");
-          const novoStatusIa = temProblema ? "Pendência encontrada" : "Validado";
+          const temVermelho = docs_result.some((d: any) => d.semaforo === "vermelho");
+          const novoStatusIa = temVermelho ? "Pendência encontrada" : "Validado";
 
           await updateOperacao(input.operacaoId, {
             statusValidacaoIa: novoStatusIa,
@@ -476,10 +542,7 @@ Retorne análise JSON para cada documento.`;
           return { success: true, resultado: resultadoJson };
         } catch (err: any) {
           if (analiseId) {
-            await updateAnaliseIa(analiseId, {
-              statusProcessamento: "erro",
-              erroProcessamento: err.message,
-            });
+            await updateAnaliseIa(analiseId, { statusProcessamento: "erro", erroProcessamento: err.message });
           }
           await updateOperacao(input.operacaoId, { statusValidacaoIa: "Não analisado" });
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na análise IA: " + err.message });
@@ -495,6 +558,7 @@ Retorne análise JSON para cada documento.`;
 
         const docs = await getDocumentosByOperacao(input.operacaoId);
         const docsEnviados = docs.filter((d) => d.arquivoUrl);
+        const docsPendentes = docs.filter((d) => !d.arquivoUrl);
 
         await createAnaliseIa({
           operacaoId: input.operacaoId,
@@ -507,36 +571,94 @@ Retorne análise JSON para cada documento.`;
         const analises = await getAnalisesByOperacao(input.operacaoId);
         const analiseRecente = analises.find((a) => a.statusProcessamento === "processando" && a.camada === "garantia");
         const analiseId = analiseRecente?.id;
+        const analiseDocumental = analises.find((a) => a.camada === "documental" && a.statusProcessamento === "concluido");
 
-        const systemPrompt = `Você é um analista de garantias da Ativa Soluções, especializado em crédito com garantia real (imóvel, veículo, rural).
-Com base nos documentos enviados, extraia as informações da garantia.
-RETORNE JSON com os campos: {
+        const systemPrompt = `Você é um Analista de Garantias Sênior da Ativa Soluções, especializado em avaliação de garantias reais para operações de crédito.
+
+SUA MISSÃO: Extrair e estruturar todos os dados da garantia a partir dos documentos enviados.
+
+EXTRAIA OS SEGUINTES DADOS:
+1. Tipo de imóvel (residencial, comercial, rural, terreno, etc.)
+2. Endereço completo (logradouro, número, complemento, bairro)
+3. Cidade e Estado
+4. Número de matrícula do imóvel
+5. Metragem total (m²)
+6. Valor estimado de mercado (baseado em IPTU, laudo ou matrícula)
+7. LTV estimado (valor solicitado / valor do imóvel × 100)
+8. Situação documental da garantia
+9. Pendências específicas da garantia
+
+SITUAÇÃO DOCUMENTAL — use frases como:
+- "Documentação aparentemente completa"
+- "Matrícula precisa atualização (emitida há mais de 30 dias)"
+- "Pendência de IPTU do exercício atual"
+- "Ausência de laudo de avaliação"
+- "Imóvel com ônus — verificar cancelamento"
+
+RETORNE JSON ESTRITAMENTE NESTE FORMATO:
+{
   "tipoGarantia": string,
+  "tipoImovel": string,
   "endereco": string,
-  "matricula": string,
-  "metragem": string,
   "cidade": string,
   "estado": string,
-  "tipoImovel": string,
-  "situacaoDocumental": string,
+  "matricula": string,
+  "metragem": string,
   "valorEstimado": string,
   "ltvEstimado": number,
+  "situacaoDocumental": string,
+  "pendenciasGarantia": [string],
   "observacoes": string
 }
-Se um campo não puder ser determinado, use null.
-NUNCA invente dados. Baseie-se apenas nos documentos fornecidos.`;
 
-        const userMessage = `Extraia os dados da garantia para a operação ${op.codigoOperacao}:
-Produto: ${op.produto}
-Cliente: ${op.nomeCliente}
-Valor Solicitado: R$ ${op.valorSolicitado}
-Documentos enviados: ${JSON.stringify(docsEnviados.map((d) => ({ nome: d.nomeDocumento, categoria: d.categoria, estado: d.estado })), null, 2)}`;
+REGRAS ABSOLUTAS:
+- NUNCA invente dados não presentes nos documentos
+- Se não conseguir identificar um dado, use "Informação não localizada automaticamente"
+- Para LTV: calcule com base no valor solicitado e no valor estimado do imóvel
+- Responda APENAS com JSON válido, sem markdown`;
+
+        const contentParts: any[] = [
+          {
+            type: "text",
+            text: `Extraia os dados da garantia para a operação ${op.codigoOperacao}.
+
+INFORMAÇÕES DA OPERAÇÃO:
+- Produto: ${op.produto}
+- Cliente: ${op.nomeCliente} (CPF: ${op.cpf})
+- Valor Solicitado: R$ ${Number(op.valorSolicitado).toLocaleString("pt-BR")}
+- Prazo: ${op.prazo} meses
+- Finalidade: ${op.finalidade ?? "Não informada"}
+- Contexto: ${op.contextoOperacao ?? "Não informado"}
+
+DOCUMENTOS ENVIADOS (${docsEnviados.length} de ${docs.length}):
+${docs.map((d) => `- [${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}] ${d.nomeDocumento} (${d.categoria})`).join("\n")}
+
+DOCUMENTOS PENDENTES: ${docsPendentes.map((d) => d.nomeDocumento).join(", ") || "Nenhum"}
+
+ANÁLISE DOCUMENTAL PRÉVIA: ${analiseDocumental ? JSON.stringify(analiseDocumental.resultadoJson) : "Não disponível"}
+
+Extraia todos os dados da garantia a partir dos documentos enviados abaixo.`,
+          },
+        ];
+
+        const docsParaAnalise = docsEnviados.slice(0, 10);
+        for (const doc of docsParaAnalise) {
+          if (doc.arquivoUrl) {
+            const mimeType = doc.arquivoUrl.toLowerCase().includes(".pdf") ? "application/pdf" : undefined;
+            if (mimeType) {
+              contentParts.push({ type: "file_url", file_url: { url: doc.arquivoUrl, mime_type: mimeType } });
+            } else {
+              contentParts.push({ type: "image_url", image_url: { url: doc.arquivoUrl, detail: "high" } });
+            }
+            contentParts.push({ type: "text", text: `[Documento acima: ${doc.nomeDocumento} | Categoria: ${doc.categoria}]` });
+          }
+        }
 
         try {
           const response = await invokeLLM({
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: userMessage },
+              { role: "user", content: contentParts },
             ],
             response_format: { type: "json_object" } as any,
           });
@@ -556,7 +678,6 @@ Documentos enviados: ${JSON.stringify(docsEnviados.map((d) => ({ nome: d.nomeDoc
             });
           }
 
-          // Criar ou atualizar garantia
           const garantiasExistentes = await getGarantiasByOperacao(input.operacaoId);
           const garantiaData = {
             tipoGarantia: resultado.tipoGarantia ?? op.produto,
@@ -567,10 +688,15 @@ Documentos enviados: ${JSON.stringify(docsEnviados.map((d) => ({ nome: d.nomeDoc
             estado: resultado.estado,
             tipoImovel: resultado.tipoImovel,
             situacaoDocumental: resultado.situacaoDocumental,
-            valorEstimado: resultado.valorEstimado ? String(resultado.valorEstimado).replace(/[^0-9.,]/g, "").replace(",", ".") : undefined,
+            valorEstimado: resultado.valorEstimado
+              ? String(resultado.valorEstimado).replace(/[^0-9.,]/g, "").replace(",", ".")
+              : undefined,
             ltvEstimado: resultado.ltvEstimado ? String(resultado.ltvEstimado) : undefined,
             preenchidoPorIa: true,
-            dadosExtrasJson: { observacoes: resultado.observacoes },
+            dadosExtrasJson: {
+              observacoes: resultado.observacoes,
+              pendenciasGarantia: resultado.pendenciasGarantia ?? [],
+            },
           };
 
           if (garantiasExistentes.length > 0) {
@@ -582,10 +708,7 @@ Documentos enviados: ${JSON.stringify(docsEnviados.map((d) => ({ nome: d.nomeDoc
           return { success: true, resultado };
         } catch (err: any) {
           if (analiseId) {
-            await updateAnaliseIa(analiseId, {
-              statusProcessamento: "erro",
-              erroProcessamento: err.message,
-            });
+            await updateAnaliseIa(analiseId, { statusProcessamento: "erro", erroProcessamento: err.message });
           }
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao preencher garantia: " + err.message });
         }
@@ -598,14 +721,17 @@ Documentos enviados: ${JSON.stringify(docsEnviados.map((d) => ({ nome: d.nomeDoc
         const op = await getOperacaoById(input.operacaoId);
         if (!op) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const [analises, garantiasOp] = await Promise.all([
+        const [analises, garantiasOp, docs] = await Promise.all([
           getAnalisesByOperacao(input.operacaoId),
           getGarantiasByOperacao(input.operacaoId),
+          getDocumentosByOperacao(input.operacaoId),
         ]);
 
         const analiseDocumental = analises.find((a) => a.camada === "documental" && a.statusProcessamento === "concluido");
         const analiseGarantia = analises.find((a) => a.camada === "garantia" && a.statusProcessamento === "concluido");
         const garantia = garantiasOp[0];
+        const docsEnviados = docs.filter((d) => d.arquivoUrl);
+        const docsPendentes = docs.filter((d) => !d.arquivoUrl);
 
         await createAnaliseIa({
           operacaoId: input.operacaoId,
@@ -619,29 +745,83 @@ Documentos enviados: ${JSON.stringify(docsEnviados.map((d) => ({ nome: d.nomeDoc
         const analiseRecente = analisesAtualizadas.find((a) => a.statusProcessamento === "processando" && a.camada === "revisao");
         const analiseId = analiseRecente?.id;
 
-        const systemPrompt = `Você é um Analista de Crédito Sênior da Ativa Soluções, especializado em operações de crédito com garantia real.
-PAPEL: Gerar revisão completa para apresentação em comitê de crédito e envio às Instituições Financeiras.
-TOM: Sempre comercial e positivo. A IA NÃO reprova operações — ajuda a estruturar a melhor defesa possível.
-RETORNE JSON com os campos:
-{
-  "resumoOperacional": string (2-3 parágrafos resumindo a operação),
-  "parecerComercial": string (avaliação comercial positiva do cliente),
-  "defesaOperacao": string (argumentos para aprovação, máx 2000 chars),
-  "analiseDocumental": string (resumo da situação documental),
-  "conclusao": string (parecer final positivo e recomendação)
-}
-REGRAS: NUNCA invente dados. NUNCA reprove a operação. Foque nos pontos positivos. Máx 2000 chars por campo.`;
+        const systemPrompt = `Você é um Analista de Crédito Sênior da Ativa Soluções, especializado em operações de crédito com garantia real (Home Equity, Auto Equity, Rural Equity, Imóvel em Construção).
 
-        const userMessage = `Gere revisão completa para a operação ${op.codigoOperacao}:
-Produto: ${op.produto}
-Cliente: ${op.nomeCliente}
-Valor Solicitado: R$ ${op.valorSolicitado}
-Prazo: ${op.prazo} meses
-Finalidade: ${op.finalidade}
-Estado Civil: ${op.estadoCivil}
-Contexto da Operação: ${op.contextoOperacao ?? op.observacoesEstrategicas ?? "Não informado"}
-Garantia: ${garantia ? JSON.stringify({ tipo: garantia.tipoGarantia, valor: garantia.valorEstimado, ltv: garantia.ltvEstimado, cidade: garantia.cidade }) : "Não disponível"}
-Análise Documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.resultadoJson) : "Não disponível"}`;
+SUA MISSÃO: Gerar revisão completa e defesa de crédito profissional para apresentação em comitê de crédito e envio às Instituições Financeiras parceiras.
+
+PRINCÍPIOS:
+- Tom SEMPRE comercial, positivo e institucional
+- Linguagem técnica e consultiva, própria de comitê de crédito
+- A IA NÃO reprova operações — estrutura a melhor defesa possível
+- Responsabilidade final permanece com o analista humano
+- NUNCA invente dados não fornecidos
+
+ESTRUTURA OBRIGATÓRIA DA DEFESA (10 seções):
+1. Resumo da Operação
+2. Perfil do Cliente
+3. Finalidade do Crédito
+4. Capacidade Financeira
+5. Análise da Garantia
+6. Situação Documental
+7. Mitigadores de Risco
+8. LTV Estimado
+9. Pendências Identificadas
+10. Parecer Preliminar do Analista
+
+RETORNE JSON ESTRITAMENTE NESTE FORMATO:
+{
+  "resumoOperacional": string,
+  "perfilCliente": string,
+  "finalidadeCredito": string,
+  "capacidadeFinanceira": string,
+  "analiseGarantia": string,
+  "situacaoDocumental": string,
+  "mitigadoresRisco": string,
+  "ltvEstimado": string,
+  "pendenciasIdentificadas": [string],
+  "parecerPreliminar": string,
+  "defesaComercial": string
+}
+
+REGRAS:
+- Máx 2000 chars por campo de texto
+- Responda APENAS com JSON válido, sem markdown
+- Use linguagem formal e técnica em todos os campos`;
+
+        const userMessage = `Gere a revisão completa e defesa de crédito para a operação ${op.codigoOperacao}.
+
+DADOS DA OPERAÇÃO:
+- Produto: ${op.produto}
+- Cliente/Tomador: ${op.nomeCliente} (CPF: ${op.cpf})
+- Cônjuge: ${op.nomeConjuge ? `${op.nomeConjuge} (CPF: ${op.cpfConjuge})` : "Não informado"}
+- Estado Civil: ${op.estadoCivil}
+- Valor Solicitado: R$ ${Number(op.valorSolicitado).toLocaleString("pt-BR")}
+- Prazo: ${op.prazo} meses
+- Finalidade: ${op.finalidade ?? "Não informada"}
+- Contexto da Operação: ${op.contextoOperacao ?? op.observacoesEstrategicas ?? "Não informado"}
+
+DADOS DA GARANTIA:
+${garantia ? `- Tipo: ${garantia.tipoGarantia}
+- Imóvel: ${garantia.tipoImovel ?? "Não identificado"}
+- Endereço: ${garantia.endereco ?? "Não identificado"}
+- Cidade/Estado: ${garantia.cidade ?? "Não identificada"}/${garantia.estado ?? "Não identificado"}
+- Matrícula: ${garantia.matricula ?? "Não identificada"}
+- Metragem: ${garantia.metragem ?? "Não identificada"}
+- Valor Estimado: R$ ${garantia.valorEstimado ?? "Não estimado"}
+- LTV Estimado: ${garantia.ltvEstimado ?? "Não calculado"}%
+- Situação Documental: ${garantia.situacaoDocumental ?? "Não avaliada"}
+- Observações: ${(garantia.dadosExtrasJson as any)?.observacoes ?? "Nenhuma"}` : "Garantia ainda não analisada"}
+
+SITUAÇÃO DOCUMENTAL:
+- Total de documentos: ${docs.length}
+- Documentos enviados: ${docsEnviados.length}
+- Documentos pendentes: ${docsPendentes.length} (${docsPendentes.map((d) => d.nomeDocumento).join(", ") || "Nenhum"})
+- Resultado da análise documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.resultadoJson) : "Análise documental não realizada"}
+
+ANÁLISE DE GARANTIA PRÉVIA:
+${analiseGarantia ? JSON.stringify(analiseGarantia.resultadoJson) : "Análise de garantia não realizada"}
+
+Gere a revisão completa seguindo a estrutura de 10 seções obrigatórias.`;
 
         const inicio = Date.now();
 
@@ -681,25 +861,21 @@ Análise Documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.resu
             alteradoPor: user.id,
           });
 
-          // Notificar Admin (Renata)
           await notifyOwner({
             title: `✅ Operação ${op.codigoOperacao} pronta para validação`,
-            content: `A operação ${op.codigoOperacao} de ${op.nomeCliente} (${op.produto}) concluiu a revisão IA e está pronta para validação humana e distribuição às IFs.`,
+            content: `A operação ${op.codigoOperacao} de ${op.nomeCliente} (${op.produto}) concluiu a revisão IA completa e está pronta para validação humana e distribuição às IFs.\n\nParecer preliminar: ${resultado.parecerPreliminar?.substring(0, 200) ?? "Gerado"}...`,
           }).catch(() => {});
 
           return { success: true, resultado };
         } catch (err: any) {
           if (analiseId) {
-            await updateAnaliseIa(analiseId, {
-              statusProcessamento: "erro",
-              erroProcessamento: err.message,
-            });
+            await updateAnaliseIa(analiseId, { statusProcessamento: "erro", erroProcessamento: err.message });
           }
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na revisão: " + err.message });
         }
       }),
 
-    gerarDefesa: adminProcedure
+        gerarDefesa: adminProcedure
       .input(z.object({ operacaoId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const user = ctx.user as any;
