@@ -19,7 +19,6 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  // Perfil Ativa: admin = Renata, assessor = consultor
   perfil: mysqlEnum("perfil", ["admin", "assessor"]).default("assessor").notNull(),
   numeroWhatsapp: varchar("numeroWhatsapp", { length: 20 }),
   ativo: boolean("ativo").default(true).notNull(),
@@ -48,11 +47,10 @@ export const operacoes = mysqlTable("operacoes", {
   ]).notNull(),
   emailTomador: varchar("emailTomador", { length: 320 }).notNull(),
   telefoneTomador: varchar("telefoneTomador", { length: 20 }).notNull(),
-  // Cônjuge (obrigatório se casado)
   nomeConjuge: varchar("nomeConjuge", { length: 255 }),
+  cpfConjuge: varchar("cpfConjuge", { length: 14 }),
   emailConjuge: varchar("emailConjuge", { length: 320 }),
   telefoneConjuge: varchar("telefoneConjuge", { length: 20 }),
-  // Produto e financeiro
   produto: mysqlEnum("produto", [
     "Home Equity",
     "Auto Equity",
@@ -60,12 +58,14 @@ export const operacoes = mysqlTable("operacoes", {
     "Imóvel em Construção",
   ]).notNull(),
   valorSolicitado: decimal("valorSolicitado", { precision: 15, scale: 2 }).notNull(),
-  prazo: int("prazo").notNull(), // em meses
+  prazo: int("prazo").notNull(),
   finalidade: text("finalidade").notNull(),
-  // Responsáveis
+  // Campo único de contexto (substitui observacoesEstrategicas)
+  contextoOperacao: text("contextoOperacao"),
+  // Mantido para compatibilidade retroativa
+  observacoesEstrategicas: text("observacoesEstrategicas"),
   assessorId: int("assessorId").notNull(),
-  responsavelOperacionalId: int("responsavelOperacionalId").notNull(),
-  // Status e controle
+  responsavelOperacionalId: int("responsavelOperacionalId"),
   statusMacro: mysqlEnum("statusMacro", [
     "Pré-cadastro",
     "Aguardando documentos",
@@ -93,16 +93,23 @@ export const operacoes = mysqlTable("operacoes", {
   ])
     .default("Não analisado")
     .notNull(),
+  // Prioridade simplificada (Normal/Alta) + retrocompatível
   prioridade: mysqlEnum("prioridade", ["Baixa", "Normal", "Alta", "Urgente"])
     .default("Normal")
     .notNull(),
   statusRascunho: boolean("statusRascunho").default(false).notNull(),
-  observacoesEstrategicas: text("observacoesEstrategicas"),
-  observacoesHistorico: json("observacoesHistorico"), // array de {texto, editadoPor, editadoEm}
-  // Módulo 2 (prever agora)
+  // SCR
+  statusScr: mysqlEnum("statusScr", [
+    "Não iniciado",
+    "Aguardando assinatura",
+    "Parcialmente assinado",
+    "Assinado completo",
+  ])
+    .default("Não iniciado")
+    .notNull(),
+  observacoesHistorico: json("observacoesHistorico"),
   linkToken: varchar("linkToken", { length: 36 }),
   linkExpiracao: timestamp("linkExpiracao"),
-  // Controle
   ultimaMovimentacaoEm: timestamp("ultimaMovimentacaoEm").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -112,16 +119,30 @@ export const operacoes = mysqlTable("operacoes", {
 export type Operacao = typeof operacoes.$inferSelect;
 export type InsertOperacao = typeof operacoes.$inferInsert;
 
-// ─── Garantias ───────────────────────────────────────────────────────────────
+// ─── Garantias (expandida para preenchimento por IA) ─────────────────────────
 
 export const garantias = mysqlTable("garantias", {
   id: int("id").autoincrement().primaryKey(),
   operacaoId: int("operacaoId").notNull(),
   tipoGarantia: varchar("tipoGarantia", { length: 100 }).notNull(),
   descricao: text("descricao"),
+  // Campos extraídos pela IA
+  endereco: text("endereco"),
+  matricula: varchar("matricula", { length: 100 }),
+  metragem: varchar("metragem", { length: 50 }),
+  cidade: varchar("cidade", { length: 150 }),
+  estado: varchar("estado", { length: 50 }),
+  tipoImovel: varchar("tipoImovel", { length: 100 }),
+  situacaoDocumental: varchar("situacaoDocumental", { length: 100 }),
+  ltvEstimado: decimal("ltvEstimado", { precision: 5, scale: 2 }),
   valorEstimado: decimal("valorEstimado", { precision: 15, scale: 2 }),
+  // Controle
+  preenchidoPorIa: boolean("preenchidoPorIa").default(false).notNull(),
+  editadoManualmente: boolean("editadoManualmente").default(false).notNull(),
+  dadosExtrasJson: json("dadosExtrasJson"),
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Garantia = typeof garantias.$inferSelect;
@@ -133,15 +154,17 @@ export const documentos = mysqlTable("documentos", {
   id: int("id").autoincrement().primaryKey(),
   operacaoId: int("operacaoId").notNull(),
   nomeDocumento: varchar("nomeDocumento", { length: 255 }).notNull(),
-  categoria: varchar("categoria", { length: 100 }).notNull(), // Pessoal, Renda, Imóvel, Veículo, etc.
+  categoria: varchar("categoria", { length: 100 }).notNull(),
   estado: mysqlEnum("estado", [
     "Pendente",
     "Enviado",
+    "Validado",
+    "Pendência encontrada",
+    "Ilegível",
+    "Vencido",
     "Em Análise",
     "Aprovado",
     "Reprovado",
-    "Ilegível",
-    "Vencido",
     "Reenviar",
   ])
     .default("Pendente")
@@ -196,14 +219,15 @@ export type InsertDocumentoComplementar = typeof documentosComplementares.$infer
 export const analises_ia = mysqlTable("analises_ia", {
   id: int("id").autoincrement().primaryKey(),
   operacaoId: int("operacaoId").notNull(),
-  camada: mysqlEnum("camada", ["documental", "analista"]).notNull(),
+  // camada: documental, analista, garantia, revisao
+  camada: mysqlEnum("camada", ["documental", "analista", "garantia", "revisao"]).notNull(),
   resultadoJson: json("resultadoJson"),
   resultadoTexto: text("resultadoTexto"),
   promptUtilizado: text("promptUtilizado"),
   modeloUtilizado: varchar("modeloUtilizado", { length: 100 }),
   tokensConsumidos: int("tokensConsumidos"),
   custoEstimado: decimal("custoEstimado", { precision: 10, scale: 6 }),
-  tempoProcessamento: int("tempoProcessamento"), // ms
+  tempoProcessamento: int("tempoProcessamento"),
   statusProcessamento: mysqlEnum("statusProcessamento", [
     "processando",
     "concluido",
@@ -218,6 +242,31 @@ export const analises_ia = mysqlTable("analises_ia", {
 
 export type AnaliseIa = typeof analises_ia.$inferSelect;
 export type InsertAnaliseIa = typeof analises_ia.$inferInsert;
+
+// ─── Termos SCR ──────────────────────────────────────────────────────────────
+
+export const termosScr = mysqlTable("termos_scr", {
+  id: int("id").autoincrement().primaryKey(),
+  operacaoId: int("operacaoId").notNull(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  linkUnico: text("linkUnico").notNull(),
+  status: mysqlEnum("status", [
+    "Aguardando assinatura",
+    "Parcialmente assinado",
+    "Assinado completo",
+  ])
+    .default("Aguardando assinatura")
+    .notNull(),
+  assinadoClienteEm: timestamp("assinadoClienteEm"),
+  assinadoConjugeEm: timestamp("assinadoConjugeEm"),
+  expiracaoEm: timestamp("expiracaoEm"),
+  enviadoPorWhatsapp: boolean("enviadoPorWhatsapp").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TermoScr = typeof termosScr.$inferSelect;
+export type InsertTermoScr = typeof termosScr.$inferInsert;
 
 // ─── Instituições Financeiras ────────────────────────────────────────────────
 
@@ -265,7 +314,7 @@ export const historicoStatusOperacao = mysqlTable("historico_status_operacao", {
 export type HistoricoStatus = typeof historicoStatusOperacao.$inferSelect;
 export type InsertHistoricoStatus = typeof historicoStatusOperacao.$inferInsert;
 
-// ─── Consentimentos LGPD (Módulo 2) ─────────────────────────────────────────
+// ─── Consentimentos LGPD ─────────────────────────────────────────────────────
 
 export const consentimentosLgpd = mysqlTable("consentimentos_lgpd", {
   id: int("id").autoincrement().primaryKey(),

@@ -15,6 +15,13 @@
       "when": 1779057327440,
       "tag": "0001_far_adam_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1779143922139,
+      "tag": "0002_wonderful_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

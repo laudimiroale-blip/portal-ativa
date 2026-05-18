@@ -10,6 +10,7 @@ import {
   instituicoesFinanceiras,
   logsAuditoria,
   operacoes,
+  termosScr,
   users,
   versoesDocumento,
 } from "../drizzle/schema";
@@ -53,7 +54,6 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     updateSet.lastSignedIn = user.lastSignedIn;
   }
 
-  // Owner gets admin + admin perfil automatically
   if (user.openId === ENV.ownerOpenId) {
     values.role = "admin";
     values.perfil = "admin";
@@ -94,10 +94,7 @@ export async function updateUserPerfil(userId: number, perfil: "admin" | "assess
 export async function gerarCodigoOperacao(): Promise<string> {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  // Gera sequencial: ATV-2026-000001
-  const result = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(operacoes);
+  const result = await db.select({ count: sql<number>`COUNT(*)` }).from(operacoes);
   const count = Number(result[0]?.count ?? 0) + 1;
   const seq = String(count).padStart(6, "0");
   const year = new Date().getFullYear();
@@ -107,8 +104,7 @@ export async function gerarCodigoOperacao(): Promise<string> {
 export async function createOperacao(data: typeof operacoes.$inferInsert) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const result = await db.insert(operacoes).values(data);
-  return result;
+  return db.insert(operacoes).values(data);
 }
 
 export async function getOperacoes(filters?: {
@@ -117,25 +113,16 @@ export async function getOperacoes(filters?: {
   produto?: string;
   prioridade?: string;
   busca?: string;
-  includeRascunho?: boolean;
 }) {
   const db = await getDb();
   if (!db) return [];
 
   const conditions: SQL[] = [isNull(operacoes.deletedAt) as SQL];
 
-  if (filters?.assessorId) {
-    conditions.push(eq(operacoes.assessorId, filters.assessorId));
-  }
-  if (filters?.statusMacro) {
-    conditions.push(eq(operacoes.statusMacro, filters.statusMacro as any));
-  }
-  if (filters?.produto) {
-    conditions.push(eq(operacoes.produto, filters.produto as any));
-  }
-  if (filters?.prioridade) {
-    conditions.push(eq(operacoes.prioridade, filters.prioridade as any));
-  }
+  if (filters?.assessorId) conditions.push(eq(operacoes.assessorId, filters.assessorId));
+  if (filters?.statusMacro) conditions.push(eq(operacoes.statusMacro, filters.statusMacro as any));
+  if (filters?.produto) conditions.push(eq(operacoes.produto, filters.produto as any));
+  if (filters?.prioridade) conditions.push(eq(operacoes.prioridade, filters.prioridade as any));
   if (filters?.busca) {
     const busca = `%${filters.busca}%`;
     const orClause = or(
@@ -146,13 +133,11 @@ export async function getOperacoes(filters?: {
     if (orClause) conditions.push(orClause as SQL);
   }
 
-  const rows = await db
+  return db
     .select()
     .from(operacoes)
     .where(and(...conditions))
     .orderBy(desc(operacoes.ultimaMovimentacaoEm));
-
-  return rows;
 }
 
 export async function getOperacaoById(id: number) {
@@ -181,6 +166,52 @@ export async function softDeleteOperacao(id: number) {
   await db.update(operacoes).set({ deletedAt: new Date() }).where(eq(operacoes.id, id));
 }
 
+// ─── Métricas por Consultor ──────────────────────────────────────────────────
+
+export async function getMetricasPorConsultor() {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Buscar todos os assessores ativos
+  const assessores = await db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(and(eq(users.ativo, true), isNull(users.deletedAt)));
+
+  const resultados = await Promise.all(
+    assessores.map(async (a) => {
+      const ops = await db
+        .select({ statusMacro: operacoes.statusMacro, statusRascunho: operacoes.statusRascunho })
+        .from(operacoes)
+        .where(and(eq(operacoes.assessorId, a.id), isNull(operacoes.deletedAt)));
+
+      if (ops.length === 0) return null;
+
+      const total = ops.length;
+      const emAnalise = ops.filter((o) =>
+        ["Em análise IA", "Em validação humana", "Documentação completa"].includes(o.statusMacro)
+      ).length;
+      const aprovadas = ops.filter((o) => o.statusMacro === "Aprovada").length;
+      const rascunhos = ops.filter((o) => o.statusRascunho).length;
+      const pendentes = ops.filter((o) =>
+        ["Aguardando documentos", "Documentação parcial", "Pré-cadastro"].includes(o.statusMacro)
+      ).length;
+
+      return {
+        assessorId: a.id,
+        nomeAssessor: a.name ?? "Consultor",
+        total,
+        emAnalise,
+        aprovadas,
+        rascunhos,
+        pendentes,
+      };
+    })
+  );
+
+  return resultados.filter(Boolean) as NonNullable<(typeof resultados)[number]>[];
+}
+
 // ─── Documentos ──────────────────────────────────────────────────────────────
 
 export async function getDocumentosByOperacao(operacaoId: number) {
@@ -195,8 +226,7 @@ export async function getDocumentosByOperacao(operacaoId: number) {
 export async function createDocumento(data: typeof documentos.$inferInsert) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const result = await db.insert(documentos).values(data);
-  return result;
+  return db.insert(documentos).values(data);
 }
 
 export async function updateDocumento(id: number, data: Partial<typeof documentos.$inferInsert>) {
@@ -251,8 +281,7 @@ export async function getAnalisesByOperacao(operacaoId: number) {
 export async function createAnaliseIa(data: typeof analises_ia.$inferInsert) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const result = await db.insert(analises_ia).values(data);
-  return result;
+  return db.insert(analises_ia).values(data);
 }
 
 export async function updateAnaliseIa(id: number, data: Partial<typeof analises_ia.$inferInsert>) {
@@ -327,17 +356,66 @@ export async function createGarantia(data: typeof garantias.$inferInsert) {
   await db.insert(garantias).values(data);
 }
 
+export async function updateGarantia(id: number, data: Partial<typeof garantias.$inferInsert>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(garantias).set(data).where(eq(garantias.id, id));
+}
+
+// ─── Termos SCR ──────────────────────────────────────────────────────────────
+
+export async function getTermoScrByOperacao(operacaoId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db
+    .select()
+    .from(termosScr)
+    .where(eq(termosScr.operacaoId, operacaoId))
+    .orderBy(desc(termosScr.createdAt))
+    .limit(1);
+  return result[0] ?? null;
+}
+
+export async function createTermoScr(data: typeof termosScr.$inferInsert) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(termosScr).values(data);
+}
+
+export async function updateTermoScr(id: number, data: Partial<typeof termosScr.$inferInsert>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(termosScr).set(data).where(eq(termosScr.id, id));
+}
+
+export async function getTermoScrByToken(token: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(termosScr).where(eq(termosScr.token, token)).limit(1);
+  return result[0] ?? null;
+}
+
 // ─── Métricas Dashboard ──────────────────────────────────────────────────────
 
 export async function getMetricasDashboard() {
   const db = await getDb();
   if (!db) return null;
 
-  const [total, rascunhos, aprovadas, emAnalise] = await Promise.all([
+  const [total, rascunhos, aprovadas, emAnalise, pendentes] = await Promise.all([
     db.select({ count: sql<number>`COUNT(*)` }).from(operacoes).where(isNull(operacoes.deletedAt)),
     db.select({ count: sql<number>`COUNT(*)` }).from(operacoes).where(and(eq(operacoes.statusRascunho, true), isNull(operacoes.deletedAt))),
     db.select({ count: sql<number>`COUNT(*)` }).from(operacoes).where(and(eq(operacoes.statusMacro, "Aprovada"), isNull(operacoes.deletedAt))),
     db.select({ count: sql<number>`COUNT(*)` }).from(operacoes).where(and(eq(operacoes.statusMacro, "Em análise IA"), isNull(operacoes.deletedAt))),
+    db.select({ count: sql<number>`COUNT(*)` }).from(operacoes).where(
+      and(
+        isNull(operacoes.deletedAt),
+        or(
+          eq(operacoes.statusMacro, "Aguardando documentos"),
+          eq(operacoes.statusMacro, "Documentação parcial"),
+          eq(operacoes.statusMacro, "Pré-cadastro")
+        ) as SQL
+      )
+    ),
   ]);
 
   return {
@@ -345,6 +423,7 @@ export async function getMetricasDashboard() {
     rascunhos: Number(rascunhos[0]?.count ?? 0),
     aprovadas: Number(aprovadas[0]?.count ?? 0),
     emAnalise: Number(emAnalise[0]?.count ?? 0),
+    pendentes: Number(pendentes[0]?.count ?? 0),
   };
 }
 
@@ -353,7 +432,6 @@ export async function getOperacoesComSlaAlert() {
   if (!db) return [];
 
   const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const limite7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   return db
     .select()

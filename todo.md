@@ -59,3 +59,28 @@
 - [ ] Consentimento LGPD digital
 - [ ] Relatórios e exportação PDF
 - [ ] Gestão de usuários (tela admin)
+
+## V1 Definitiva — Evoluções (Pasted_content_08)
+
+### Dashboard Admin
+- [x] Remover botão "Nova Operação" do Dashboard
+- [x] Adicionar seção "Visão por Consultor" com métricas individuais (total, em análise, aprovadas, rascunhos)
+
+### Nova Operação — Fluxo de 6 Etapas
+- [x] Etapa 1: Dados do Cliente (nome, CPF, estado civil, e-mail, telefone; campos de cônjuge condicionais)
+- [x] Etapa 2: Dados da Operação (produto, valor, prazo, finalidade, campo "Contexto da Operação", prioridade Normal/Alta)
+- [x] Etapa 3: Upload em lote de documentos com checklist dinâmico por produto
+- [x] Etapa 4: Dados da Garantia preenchidos automaticamente pela IA — modo leitura + botão editar
+- [x] Etapa 5: Revisão estilo comitê de crédito — IA gera resumo, parecer, defesa, análise documental e conclusão; botões copiar/editar por campo e copiar tudo
+- [x] Etapa 6: Termo SCR — gerar termo, link único, status aguardando/parcialmente assinado/assinado completo
+
+### Ajustes de Schema e Backend
+- [x] Adicionar campo `contextoOperacao` na tabela operacoes
+- [x] Simplificar prioridade para Normal/Alta
+- [x] Adicionar tabela `termos_scr` (id, operacaoId, token, status, assinadoClienteEm, assinadoConjugeEm, linkUnico, createdAt)
+- [x] Adicionar procedure `operacoes.metricasPorConsultor` (Admin only)
+- [x] Adicionar procedure `ia.preencherGarantia` (extrai dados da garantia dos documentos)
+- [x] Adicionar procedure `ia.gerarRevisaoCompleta` (resumo + parecer + defesa + análise + conclusão)
+- [x] Adicionar procedures `termoScr.criar`, `termoScr.obter`, `termoScr.assinar`
+- [x] Notificação para Admin quando operação fica pronta para validação humana
+- [x] Aviso de responsabilidade humana obrigatório na Etapa 5 (Revisão)
