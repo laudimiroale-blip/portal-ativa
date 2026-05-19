@@ -90,28 +90,28 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
           const Icon = item.icon;
           const isActive = location === item.href || (item.href !== "/dashboard" && location.startsWith(item.href));
           return (
-            <Link key={item.href} href={item.href}>
-              <a
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 group",
-                  collapsed && "justify-center px-2",
-                  isActive
-                    ? "bg-primary/15 text-primary border border-primary/25"
-                    : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
-                )}
-              >
-                <Icon className={cn(
-                  "w-4 h-4 flex-shrink-0",
-                  isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                )} />
-                {!collapsed && <span>{item.label}</span>}
-                {!collapsed && item.badge && (
-                  <span className="ml-auto text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full border border-primary/30">
-                    {item.badge}
-                  </span>
-                )}
-              </a>
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150 group",
+                collapsed && "justify-center px-2",
+                isActive
+                  ? "bg-primary/15 text-primary border border-primary/25"
+                  : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"
+              )}
+            >
+              <Icon className={cn(
+                "w-4 h-4 flex-shrink-0",
+                isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+              )} />
+              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && item.badge && (
+                <span className="ml-auto text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full border border-primary/30">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           );
         })}
