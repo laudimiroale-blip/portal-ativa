@@ -110,6 +110,13 @@ export const operacoes = mysqlTable("operacoes", {
   observacoesHistorico: json("observacoesHistorico"),
   linkToken: varchar("linkToken", { length: 36 }),
   linkExpiracao: timestamp("linkExpiracao"),
+  // Campos da nova etapa de cadastro
+  valorGarantia: decimal("valorGarantia", { precision: 15, scale: 2 }),
+  tipoGarantiaDescricao: varchar("tipoGarantiaDescricao", { length: 255 }),
+  etapaAtual: int("etapaAtual").default(1).notNull(),
+  defesaComercial: text("defesaComercial"),
+  defesaAprovada: boolean("defesaAprovada").default(false).notNull(),
+  perfilExtraidoJson: json("perfilExtraidoJson"),
   ultimaMovimentacaoEm: timestamp("ultimaMovimentacaoEm").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

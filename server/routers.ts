@@ -125,21 +125,24 @@ export const appRouter = router({
       .input(
         z.object({
           nomeCliente: z.string().min(2),
-          cpf: z.string().min(11),
-          estadoCivil: z.enum(["Solteiro", "Casado", "Divorciado", "Viúvo", "União Estável"]),
-          emailTomador: z.string().email(),
+          cpf: z.string().optional().default(""),
+          estadoCivil: z.enum(["Solteiro", "Casado", "Divorciado", "Viúvo", "União Estável"]).optional().default("Solteiro"),
+          emailTomador: z.string().optional().default(""),
           telefoneTomador: z.string().min(10),
           nomeConjuge: z.string().optional(),
           cpfConjuge: z.string().optional(),
           emailConjuge: z.string().optional(),
           telefoneConjuge: z.string().optional(),
-          produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"]),
-          valorSolicitado: z.string(),
-          prazo: z.number().min(1),
-          finalidade: z.string().min(3),
+          produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"]).optional().default("Home Equity"),
+          valorSolicitado: z.string().optional().default("0"),
+          prazo: z.number().min(1).optional().default(12),
+          finalidade: z.string().optional().default(""),
           contextoOperacao: z.string().optional(),
+          valorGarantia: z.string().optional(),
+          tipoGarantiaDescricao: z.string().optional(),
           prioridade: z.enum(["Normal", "Alta"]).default("Normal"),
           statusRascunho: z.boolean().default(false),
+          etapaAtual: z.number().optional().default(1),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -166,6 +169,9 @@ export const appRouter = router({
           statusRascunho: input.statusRascunho,
           statusMacro: "Pré-cadastro",
           statusValidacaoIa: "Não analisado",
+          valorGarantia: input.valorGarantia,
+          tipoGarantiaDescricao: input.tipoGarantiaDescricao,
+          etapaAtual: input.etapaAtual ?? 1,
         });
 
         await inicializarChecklist(codigo, input.produto);
@@ -193,6 +199,12 @@ export const appRouter = router({
           prioridade: z.enum(["Normal", "Alta", "Baixa", "Urgente"]).optional(),
           statusRascunho: z.boolean().optional(),
           statusMacro: z.string().optional(),
+          valorGarantia: z.string().optional(),
+          tipoGarantiaDescricao: z.string().optional(),
+          etapaAtual: z.number().optional(),
+          defesaComercial: z.string().optional(),
+          defesaAprovada: z.boolean().optional(),
+          perfilExtraidoJson: z.any().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -873,6 +885,159 @@ Gere a revisão completa seguindo a estrutura de 10 seções obrigatórias.`;
           }
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na revisão: " + err.message });
         }
+      }),
+
+        conferirDocumentos: protectedProcedure
+      .input(z.object({ operacaoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const user = ctx.user as any;
+        const op = await getOperacaoById(input.operacaoId);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        const docs = await getDocumentosByOperacao(input.operacaoId);
+        const docsEnviados = docs.filter((d: any) => d.arquivoUrl);
+        // Checklist = todos os documentos; pendentes = os que não têm arquivo
+        const pendentes = docs.filter((d: any) => !d.arquivoUrl).map((d: any) => d.nomeDocumento);
+        const checklistTotal = docs.length;
+        const checklistConcluidos = docsEnviados.length;
+        // Montar conteúdo multimodal com os arquivos enviados
+        const contentParts: any[] = [
+          { type: "text", text: `Você é um Analista de Crédito Sênior especializado em operações de crédito com garantia. Analise os documentos da operação ${op.codigoOperacao} (Produto: ${op.produto}, Cliente: ${op.nomeCliente}).\n\nCHECKLIST:\n${docs.map((d: any) => `- ${d.nomeDocumento}: ${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}`).join("\n")}\n\nDOCUMENTOS ENVIADOS: ${docsEnviados.length} de ${docs.length}\n\nRetorne JSON com:\n{ aprovado: boolean, pendencias: string[], observacoes: string, documentos_analisados: number, resumo: string }` }
+        ];
+        for (const doc of docsEnviados.slice(0, 8)) {
+          if (doc.arquivoUrl) {
+            const url = doc.arquivoUrl.startsWith("/") ? `${process.env.BUILT_IN_FORGE_API_URL?.replace("/api", "") ?? ""}${doc.arquivoUrl}` : doc.arquivoUrl;
+            const ext = (doc.nomeDocumento || "").toLowerCase();
+            if (ext.endsWith(".pdf")) {
+              contentParts.push({ type: "file_url", file_url: { url, mime_type: "application/pdf" } });
+            } else {
+              contentParts.push({ type: "image_url", image_url: { url, detail: "auto" } });
+            }
+          }
+        }
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "Você é um analista de crédito sênior. Analise os documentos e retorne JSON estruturado." },
+              { role: "user", content: contentParts },
+            ],
+            response_format: { type: "json_object" } as any,
+          });
+          const rawContent = response.choices[0]?.message?.content;
+          const conteudo = typeof rawContent === "string" ? rawContent : "{}";
+          const resultado = JSON.parse(conteudo);
+          const aprovado = resultado.aprovado === true && pendentes.length === 0;
+          await updateOperacao(input.operacaoId, {
+            statusValidacaoIa: aprovado ? "Validado" : "Pendência encontrada",
+          });
+          return {
+            aprovado,
+            pendencias: pendentes.length > 0 ? pendentes : (resultado.pendencias ?? []),
+            observacoes: resultado.observacoes ?? "",
+            documentos_analisados: resultado.documentos_analisados ?? docsEnviados.length,
+            resumo: resultado.resumo ?? "",
+            checklist_total: checklistTotal,
+            checklist_concluidos: checklistConcluidos,
+          };
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na conferência: " + err.message });
+        }
+      }),
+
+        extrairPerfil: protectedProcedure
+      .input(z.object({ operacaoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const user = ctx.user as any;
+        const op = await getOperacaoById(input.operacaoId);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        const docs = await getDocumentosByOperacao(input.operacaoId);
+        const docsEnviados = docs.filter((d: any) => d.arquivoUrl);
+        const contentParts: any[] = [
+          { type: "text", text: `Extraia os dados do tomador e da garantia dos documentos da operação ${op.codigoOperacao}.\nCliente: ${op.nomeCliente}, Produto: ${op.produto}\n\nRetorne JSON com:\n{ nome_completo, cpf, rg, data_nascimento, estado_civil, nome_conjuge, cpf_conjuge, profissao, renda_media_mensal, endereco_residencial, matricula_imovel, descricao_imovel, numero_iptu, valor_estimado_imovel, cidade_imovel, estado_imovel, observacoes }\nPara campos não encontrados, use "Informação não localizada automaticamente".` }
+        ];
+        for (const doc of docsEnviados.slice(0, 10)) {
+          if (doc.arquivoUrl) {
+            const url = doc.arquivoUrl.startsWith("/") ? `${process.env.BUILT_IN_FORGE_API_URL?.replace("/api", "") ?? ""}${doc.arquivoUrl}` : doc.arquivoUrl;
+            const ext = (doc.nomeDocumento || "").toLowerCase();
+            if (ext.endsWith(".pdf")) {
+              contentParts.push({ type: "file_url", file_url: { url, mime_type: "application/pdf" } });
+            } else {
+              contentParts.push({ type: "image_url", image_url: { url, detail: "auto" } });
+            }
+          }
+        }
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "Você é um analista de crédito sênior especializado em extração de dados de documentos. Retorne JSON estruturado." },
+              { role: "user", content: contentParts },
+            ],
+            response_format: { type: "json_object" } as any,
+          });
+          const rawContent = response.choices[0]?.message?.content;
+          const conteudo = typeof rawContent === "string" ? rawContent : "{}";
+          const perfil = JSON.parse(conteudo);
+          await updateOperacao(input.operacaoId, { perfilExtraidoJson: perfil } as any);
+          return { success: true, perfil };
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na extração: " + err.message });
+        }
+      }),
+
+        gerarDefesaComercial: protectedProcedure
+      .input(z.object({ operacaoId: z.number(), comentario: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const user = ctx.user as any;
+        const op = await getOperacaoById(input.operacaoId);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        const perfil = (op as any).perfilExtraidoJson ?? {};
+        const valorGarantia = (op as any).valorGarantia ?? "Não informado";
+        const tipoGarantia = (op as any).tipoGarantiaDescricao ?? op.produto;
+        const ltv = valorGarantia && op.valorSolicitado ? ((parseFloat(op.valorSolicitado) / parseFloat(valorGarantia)) * 100).toFixed(1) + "%" : "Não calculado";
+        const systemPrompt = `Você é um Analista de Crédito Sênior da Ativa Soluções. Gere uma defesa comercial técnica e persuasiva para apresentação às Instituições Financeiras.\nREGRAS: Tom SEMPRE positivo e consultivo. Máximo 2.000 caracteres. Linguagem técnica e institucional. NÃO invente informações. NÃO mencione riscos sem mitigadores.\nESTRUTURA: 1) Perfil favorável do cliente 2) Finalidade clara e objetiva 3) Capacidade financeira demonstrada 4) Garantia sólida e LTV conservador 5) Regularidade documental 6) Parecer positivo do analista.`;
+        const userMessage = `Gere defesa comercial para:\nOperação: ${op.codigoOperacao}\nProduto: ${op.produto}\nCliente: ${op.nomeCliente}\nValor Solicitado: R$ ${op.valorSolicitado}\nPrazo: ${op.prazo} meses\nFinalidade: ${op.finalidade}\nTipo de Garantia: ${tipoGarantia}\nValor da Garantia: R$ ${valorGarantia}\nLTV Estimado: ${ltv}\nContexto: ${op.contextoOperacao ?? "Não informado"}\nPerfil Extraído: ${JSON.stringify(perfil)}${input.comentario ? `\nComentário do consultor: ${input.comentario}` : ""}`;
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userMessage },
+            ],
+          });
+          const rawContent = response.choices[0]?.message?.content;
+          const defesa = typeof rawContent === "string" ? rawContent : "";
+          await updateOperacao(input.operacaoId, { defesaComercial: defesa } as any);
+          return { success: true, defesa };
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na geração da defesa: " + err.message });
+        }
+      }),
+
+        enviarParaAnalise: protectedProcedure
+      .input(z.object({ operacaoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const user = ctx.user as any;
+        const op = await getOperacaoById(input.operacaoId);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        await updateOperacao(input.operacaoId, {
+          statusMacro: "Em validação humana",
+          statusRascunho: false,
+          etapaAtual: 5,
+        } as any);
+        await addHistoricoStatus({
+          operacaoId: input.operacaoId,
+          statusAnterior: op.statusMacro,
+          statusNovo: "Em validação humana",
+          alteradoPor: user.id,
+        });
+        await notifyOwner({
+          title: `Nova operação para análise: ${op.codigoOperacao}`,
+          content: `O consultor ${user.name ?? user.email} enviou a operação ${op.codigoOperacao} (${op.produto} — ${op.nomeCliente}) para validação humana. Acesse o portal para revisar.`,
+        });
+        await addLog({ evento: "operacao_enviada_analise", detalhe: { id: input.operacaoId }, usuarioId: user.id, operacaoId: input.operacaoId });
+        return { success: true };
       }),
 
         gerarDefesa: adminProcedure

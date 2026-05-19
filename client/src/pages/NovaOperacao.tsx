@@ -1,4 +1,3 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import AtivaDashboardLayout from "@/components/AtivaDashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +11,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Bot,
-  Building2,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
@@ -20,37 +18,41 @@ import {
   Edit3,
   FileText,
   Loader2,
+  MessageSquare,
   RefreshCw,
   Send,
   Shield,
   Upload,
   User,
+  XCircle,
 } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
-type Etapa = 1 | 2 | 3 | 4 | 5 | 6;
+type Etapa = 1 | 2 | 3 | 4 | 5;
 
 interface DadosCliente {
   nomeCliente: string;
-  cpf: string;
-  estadoCivil: "Solteiro" | "Casado" | "Divorciado" | "Viúvo" | "União Estável";
-  emailTomador: string;
   telefoneTomador: string;
-  nomeConjuge?: string;
-  cpfConjuge?: string;
-  emailConjuge?: string;
-  telefoneConjuge?: string;
+  emailTomador: string;
 }
 
 interface DadosOperacao {
   produto: "Home Equity" | "Auto Equity" | "Rural Equity" | "Imóvel em Construção";
   valorSolicitado: string;
+  valorGarantia: string;
+  tipoGarantiaDescricao: string;
   prazo: number;
   finalidade: string;
   contextoOperacao: string;
-  prioridade: "Normal" | "Alta";
+}
+
+interface ArquivoLocal {
+  id: string;
+  file: File;
+  status: "pendente" | "enviando" | "enviado" | "erro";
+  erro?: string;
 }
 
 export default function NovaOperacao() {
@@ -64,9 +66,8 @@ export default function NovaOperacao() {
     { id: 1, label: "Dados do Cliente", icon: User },
     { id: 2, label: "Dados da Operação", icon: ClipboardList },
     { id: 3, label: "Documentos", icon: FileText },
-    { id: 4, label: "Garantia IA", icon: Shield },
-    { id: 5, label: "Revisão", icon: Bot },
-    { id: 6, label: "Termo SCR", icon: Send },
+    { id: 4, label: "Resumo + Defesa", icon: Bot },
+    { id: 5, label: "SCR / Enviar", icon: Send },
   ];
 
   return (
@@ -129,8 +130,9 @@ export default function NovaOperacao() {
               onChange={setDadosOperacao}
               dadosCliente={dadosCliente}
               onBack={() => setEtapa(1)}
-              onNext={(codigo) => {
+              onNext={(codigo, opId) => {
                 setCodigoOperacao(codigo);
+                setOperacaoId(opId);
                 setEtapa(3);
               }}
             />
@@ -138,31 +140,28 @@ export default function NovaOperacao() {
           {etapa === 3 && codigoOperacao && (
             <Etapa3Documentos
               codigoOperacao={codigoOperacao}
+              operacaoId={operacaoId ?? 0}
               produto={dadosOperacao.produto!}
               onBack={() => setEtapa(2)}
               onNext={() => setEtapa(4)}
             />
           )}
           {etapa === 4 && codigoOperacao && (
-            <Etapa4GarantiaIA
+            <Etapa4ResumoDefesa
               codigoOperacao={codigoOperacao}
-              produto={dadosOperacao.produto!}
+              operacaoId={operacaoId ?? 0}
+              dadosOperacao={dadosOperacao}
               onBack={() => setEtapa(3)}
               onNext={() => setEtapa(5)}
             />
           )}
           {etapa === 5 && codigoOperacao && (
-            <Etapa5RevisaoCompleta
+            <Etapa5ScrEnviar
               codigoOperacao={codigoOperacao}
-              onBack={() => setEtapa(4)}
-              onNext={() => setEtapa(6)}
-            />
-          )}
-          {etapa === 6 && codigoOperacao && (
-            <Etapa6TermoSCR
-              codigoOperacao={codigoOperacao}
-              nomeCliente={dadosCliente.nomeCliente!}
-              estadoCivil={dadosCliente.estadoCivil!}
+              operacaoId={operacaoId ?? 0}
+              nomeCliente={dadosCliente.nomeCliente ?? ""}
+              telefoneTomador={dadosCliente.telefoneTomador ?? ""}
+              emailTomador={dadosCliente.emailTomador ?? ""}
             />
           )}
         </div>
@@ -191,81 +190,59 @@ function Etapa1DadosCliente({
 
   const validar = () => {
     const e: Record<string, string> = {};
-    if (!dados.nomeCliente?.trim()) e.nomeCliente = "Nome obrigatório";
-    if (!dados.cpf?.trim() || dados.cpf.replace(/\D/g, "").length < 11) e.cpf = "CPF inválido";
-    if (!dados.estadoCivil) e.estadoCivil = "Estado civil obrigatório";
+    if (!dados.nomeCliente?.trim() || dados.nomeCliente.trim().length < 2) e.nomeCliente = "Nome obrigatório (mínimo 2 caracteres)";
+    if (!dados.telefoneTomador?.trim() || dados.telefoneTomador.replace(/\D/g, "").length < 10) e.telefoneTomador = "Telefone inválido";
     if (!dados.emailTomador?.includes("@")) e.emailTomador = "E-mail inválido";
-    if (!dados.telefoneTomador?.trim()) e.telefoneTomador = "Telefone obrigatório";
-    if ((dados.estadoCivil === "Casado" || dados.estadoCivil === "União Estável") && !dados.nomeConjuge?.trim()) {
-      e.nomeConjuge = "Nome do cônjuge obrigatório";
-    }
     setErros(e);
     return Object.keys(e).length === 0;
   };
 
-  const temConjuge = dados.estadoCivil === "Casado" || dados.estadoCivil === "União Estável";
-
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">Dados do Cliente (Tomador)</h2>
-        <p className="text-sm text-muted-foreground">Informações pessoais do tomador da operação</p>
+        <h2 className="text-lg font-semibold text-foreground mb-1">Dados do Cliente</h2>
+        <p className="text-sm text-muted-foreground">
+          Apenas as informações básicas de contato. CPF, estado civil e demais dados serão extraídos automaticamente pela IA na Etapa 4.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FieldInput label="Nome Completo *" value={dados.nomeCliente ?? ""} onChange={(v) => set("nomeCliente", v)} placeholder="Nome completo do tomador" error={erros.nomeCliente} />
+      <div className="grid grid-cols-1 gap-4">
         <FieldInput
-          label="CPF *"
-          value={dados.cpf ?? ""}
+          label="Nome Completo *"
+          value={dados.nomeCliente ?? ""}
+          onChange={(v) => set("nomeCliente", v)}
+          placeholder="Nome completo do tomador"
+          error={erros.nomeCliente}
+        />
+        <FieldInput
+          label="Telefone / WhatsApp *"
+          value={dados.telefoneTomador ?? ""}
           onChange={(v) => {
             const digits = v.replace(/\D/g, "").slice(0, 11);
-            const formatted = digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-            set("cpf", formatted);
+            const formatted = digits.length <= 10
+              ? digits.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3")
+              : digits.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+            set("telefoneTomador", formatted);
           }}
-          placeholder="000.000.000-00"
-          error={erros.cpf}
+          placeholder="(11) 99999-9999"
+          error={erros.telefoneTomador}
         />
-        <div className="space-y-1.5">
-          <Label className="text-sm text-muted-foreground">Estado Civil *</Label>
-          <Select value={dados.estadoCivil ?? ""} onValueChange={(v) => set("estadoCivil", v)}>
-            <SelectTrigger className={cn("bg-background/50", erros.estadoCivil && "border-red-500")}>
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              {["Solteiro", "Casado", "Divorciado", "Viúvo", "União Estável"].map((v) => (
-                <SelectItem key={v} value={v}>{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {erros.estadoCivil && <p className="text-xs text-red-400">{erros.estadoCivil}</p>}
-        </div>
-        <FieldInput label="E-mail *" value={dados.emailTomador ?? ""} onChange={(v) => set("emailTomador", v)} placeholder="email@exemplo.com" error={erros.emailTomador} type="email" />
-        <FieldInput label="Telefone / WhatsApp *" value={dados.telefoneTomador ?? ""} onChange={(v) => set("telefoneTomador", v)} placeholder="(11) 99999-9999" error={erros.telefoneTomador} />
+        <FieldInput
+          label="E-mail *"
+          value={dados.emailTomador ?? ""}
+          onChange={(v) => set("emailTomador", v)}
+          placeholder="email@exemplo.com"
+          error={erros.emailTomador}
+          type="email"
+        />
       </div>
 
-      {temConjuge && (
-        <div className="border border-primary/20 rounded-lg p-4 bg-primary/5">
-          <h3 className="text-sm font-semibold text-primary mb-4 flex items-center gap-2">
-            <User className="w-4 h-4" />
-            Dados do Cônjuge
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FieldInput label="Nome do Cônjuge *" value={dados.nomeConjuge ?? ""} onChange={(v) => set("nomeConjuge", v)} placeholder="Nome completo" error={erros.nomeConjuge} />
-            <FieldInput
-              label="CPF do Cônjuge"
-              value={dados.cpfConjuge ?? ""}
-              onChange={(v) => {
-                const digits = v.replace(/\D/g, "").slice(0, 11);
-                const formatted = digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-                set("cpfConjuge", formatted);
-              }}
-              placeholder="000.000.000-00"
-            />
-            <FieldInput label="E-mail do Cônjuge" value={dados.emailConjuge ?? ""} onChange={(v) => set("emailConjuge", v)} placeholder="email@exemplo.com" type="email" />
-            <FieldInput label="Telefone do Cônjuge" value={dados.telefoneConjuge ?? ""} onChange={(v) => set("telefoneConjuge", v)} placeholder="(11) 99999-9999" />
-          </div>
-        </div>
-      )}
+      <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+        <p className="text-xs text-primary/80 flex items-start gap-2">
+          <Bot className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          CPF, RG, data de nascimento, estado civil e dados do cônjuge serão extraídos automaticamente pela IA a partir dos documentos enviados na Etapa 3.
+        </p>
+      </div>
 
       <div className="flex justify-end">
         <Button onClick={() => validar() && onNext()} className="btn-primary gap-2">
@@ -290,7 +267,7 @@ function Etapa2DadosOperacao({
   onChange: (d: Partial<DadosOperacao>) => void;
   dadosCliente: Partial<DadosCliente>;
   onBack: () => void;
-  onNext: (codigo: string) => void;
+  onNext: (codigo: string, opId: number) => void;
 }) {
   const [erros, setErros] = useState<Record<string, string>>({});
   const criarMutation = trpc.operacoes.criar.useMutation();
@@ -305,6 +282,8 @@ function Etapa2DadosOperacao({
     const e: Record<string, string> = {};
     if (!dados.produto) e.produto = "Produto obrigatório";
     if (!dados.valorSolicitado?.trim()) e.valorSolicitado = "Valor obrigatório";
+    if (!dados.valorGarantia?.trim()) e.valorGarantia = "Valor da garantia obrigatório";
+    if (!dados.tipoGarantiaDescricao?.trim()) e.tipoGarantiaDescricao = "Tipo de garantia obrigatório";
     if (!dados.prazo || dados.prazo < 1) e.prazo = "Prazo obrigatório";
     if (!dados.finalidade?.trim()) e.finalidade = "Finalidade obrigatória";
     setErros(e);
@@ -316,38 +295,38 @@ function Etapa2DadosOperacao({
     try {
       const result = await criarMutation.mutateAsync({
         nomeCliente: dadosCliente.nomeCliente!,
-        cpf: dadosCliente.cpf!,
-        estadoCivil: dadosCliente.estadoCivil!,
         emailTomador: dadosCliente.emailTomador!,
         telefoneTomador: dadosCliente.telefoneTomador!,
-        nomeConjuge: dadosCliente.nomeConjuge,
-        cpfConjuge: dadosCliente.cpfConjuge,
-        emailConjuge: dadosCliente.emailConjuge,
-        telefoneConjuge: dadosCliente.telefoneConjuge,
         produto: dados.produto!,
         valorSolicitado: dados.valorSolicitado!,
+        valorGarantia: dados.valorGarantia,
+        tipoGarantiaDescricao: dados.tipoGarantiaDescricao,
         prazo: dados.prazo!,
         finalidade: dados.finalidade!,
         contextoOperacao: dados.contextoOperacao,
-        prioridade: dados.prioridade ?? "Normal",
         statusRascunho: rascunho,
+        etapaAtual: rascunho ? 2 : 3,
       });
       toast.success(`Operação ${result.codigoOperacao} criada!`);
       if (rascunho) {
         navigate("/operacoes");
       } else {
-        onNext(result.codigoOperacao);
+        onNext(result.codigoOperacao, 0);
       }
     } catch (err: any) {
       toast.error("Erro ao criar operação: " + err.message);
     }
   };
 
+  const ltv = dados.valorSolicitado && dados.valorGarantia && parseFloat(dados.valorGarantia.replace(",", ".")) > 0
+    ? ((parseFloat(dados.valorSolicitado.replace(",", ".")) / parseFloat(dados.valorGarantia.replace(",", "."))) * 100).toFixed(1)
+    : null;
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-1">Dados da Operação</h2>
-        <p className="text-sm text-muted-foreground">Produto, valor e finalidade do crédito</p>
+        <p className="text-sm text-muted-foreground">Produto, valores e finalidade do crédito</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -366,7 +345,29 @@ function Etapa2DadosOperacao({
           {erros.produto && <p className="text-xs text-red-400">{erros.produto}</p>}
         </div>
 
-        <FieldInput label="Valor Solicitado *" value={dados.valorSolicitado ?? ""} onChange={(v) => set("valorSolicitado", v)} placeholder="Ex: 250000" error={erros.valorSolicitado} />
+        <FieldInput
+          label="Valor Solicitado (R$) *"
+          value={dados.valorSolicitado ?? ""}
+          onChange={(v) => set("valorSolicitado", v.replace(/[^\d.,]/g, ""))}
+          placeholder="Ex: 250000"
+          error={erros.valorSolicitado}
+        />
+
+        <FieldInput
+          label="Valor Aproximado da Garantia (R$) *"
+          value={dados.valorGarantia ?? ""}
+          onChange={(v) => set("valorGarantia", v.replace(/[^\d.,]/g, ""))}
+          placeholder="Ex: 500000"
+          error={erros.valorGarantia}
+        />
+
+        <FieldInput
+          label="Tipo de Garantia *"
+          value={dados.tipoGarantiaDescricao ?? ""}
+          onChange={(v) => set("tipoGarantiaDescricao", v)}
+          placeholder="Ex: Imóvel residencial, Veículo, Fazenda..."
+          error={erros.tipoGarantiaDescricao}
+        />
 
         <div className="space-y-1.5">
           <Label className="text-sm text-muted-foreground">Prazo (meses) *</Label>
@@ -376,46 +377,44 @@ function Etapa2DadosOperacao({
             max={360}
             value={dados.prazo ?? ""}
             onChange={(e) => set("prazo", Number(e.target.value))}
-            placeholder="Ex: 120"
+            placeholder="Ex: 240"
             className={cn("bg-background/50", erros.prazo && "border-red-500")}
           />
           {erros.prazo && <p className="text-xs text-red-400">{erros.prazo}</p>}
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-sm text-muted-foreground">Prioridade</Label>
-          <Select value={dados.prioridade ?? "Normal"} onValueChange={(v) => set("prioridade", v)}>
-            <SelectTrigger className="bg-background/50">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Normal">Normal</SelectItem>
-              <SelectItem value="Alta">Alta</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label className="text-sm text-muted-foreground">Finalidade *</Label>
+          <Input
+            value={dados.finalidade ?? ""}
+            onChange={(e) => set("finalidade", e.target.value)}
+            placeholder="Ex: Capital de giro, reforma, quitação de dívidas..."
+            className={cn("bg-background/50", erros.finalidade && "border-red-500")}
+          />
+          {erros.finalidade && <p className="text-xs text-red-400">{erros.finalidade}</p>}
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-sm text-muted-foreground">Finalidade *</Label>
-        <Input
-          value={dados.finalidade ?? ""}
-          onChange={(e) => set("finalidade", e.target.value)}
-          placeholder="Ex: Capital de giro, reforma, quitação de dívidas..."
-          className={cn("bg-background/50", erros.finalidade && "border-red-500")}
-        />
-        {erros.finalidade && <p className="text-xs text-red-400">{erros.finalidade}</p>}
-      </div>
+      {ltv && (
+        <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg flex items-center gap-3">
+          <Shield className="w-4 h-4 text-primary flex-shrink-0" />
+          <div className="text-sm">
+            <span className="text-muted-foreground">LTV estimado: </span>
+            <span className="font-semibold text-primary">{ltv}%</span>
+            <span className="text-muted-foreground ml-2 text-xs">(valor solicitado ÷ valor da garantia)</span>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label className="text-sm text-muted-foreground">
           Contexto da Operação
-          <span className="ml-2 text-xs text-muted-foreground/60">(usado pela IA para gerar a defesa comercial)</span>
+          <span className="ml-2 text-xs text-muted-foreground/60">(resumo da conversa com o cliente — usado pela IA para gerar a defesa)</span>
         </Label>
         <Textarea
           value={dados.contextoOperacao ?? ""}
           onChange={(e) => set("contextoOperacao", e.target.value)}
-          placeholder="Descreva o perfil do cliente, histórico, motivação, pontos positivos que devem ser destacados na análise..."
+          placeholder="Descreva o perfil do cliente, histórico, motivação, pontos positivos que devem ser destacados na análise. Quanto mais detalhes, melhor a defesa gerada pela IA."
           className="bg-background/50 min-h-[100px] resize-none"
           rows={4}
         />
@@ -427,11 +426,20 @@ function Etapa2DadosOperacao({
           Voltar
         </Button>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => handleSubmit(true)} disabled={criarMutation.isPending} className="gap-2 text-muted-foreground">
+          <Button
+            variant="outline"
+            onClick={() => handleSubmit(true)}
+            disabled={criarMutation.isPending}
+            className="gap-2 text-muted-foreground"
+          >
             {criarMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
             Salvar Rascunho
           </Button>
-          <Button onClick={() => handleSubmit(false)} disabled={criarMutation.isPending} className="btn-primary gap-2">
+          <Button
+            onClick={() => handleSubmit(false)}
+            disabled={criarMutation.isPending}
+            className="btn-primary gap-2"
+          >
             {criarMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             Criar e Continuar
             <ArrowRight className="w-4 h-4" />
@@ -444,48 +452,49 @@ function Etapa2DadosOperacao({
 
 // ─── Etapa 3: Documentos ──────────────────────────────────────────────────────
 
-// Tipo para arquivo local antes do upload
-interface ArquivoLocal {
-  id: string; // uuid local
-  file: File;
-  status: "pendente" | "enviando" | "enviado" | "erro";
-  erro?: string;
-}
-
 function Etapa3Documentos({
   codigoOperacao,
+  operacaoId: operacaoIdProp,
   produto,
   onBack,
   onNext,
 }: {
   codigoOperacao: string;
+  operacaoId: number;
   produto: string;
   onBack: () => void;
   onNext: () => void;
 }) {
   const { data: ops } = trpc.operacoes.listar.useQuery({ busca: codigoOperacao });
-  const operacaoId = ops?.find((o) => o.codigoOperacao === codigoOperacao)?.id;
+  const operacaoId = ops?.find((o) => o.codigoOperacao === codigoOperacao)?.id ?? operacaoIdProp;
 
   const { data: documentos, refetch } = trpc.documentos.listar.useQuery(
     { operacaoId: operacaoId! },
     { enabled: !!operacaoId }
   );
   const uploadMutation = trpc.documentos.upload.useMutation();
+  const conferirMutation = trpc.ia.conferirDocumentos.useMutation();
+  const atualizarMutation = trpc.operacoes.atualizar.useMutation();
 
-  // Mapa docId -> lista de arquivos locais (fila de upload)
   const [filaArquivos, setFilaArquivos] = useState<Record<number, ArquivoLocal[]>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [resultadoConferencia, setResultadoConferencia] = useState<{
+    aprovado: boolean;
+    pendencias: string[];
+    observacoes: string;
+    documentos_analisados: number;
+    resumo: string;
+    checklist_total: number;
+    checklist_concluidos: number;
+  } | null>(null);
+  const [conferindo, setConferindo] = useState(false);
 
   const enviados = documentos?.filter((d) => d.estado !== "Pendente") ?? [];
   const total = documentos?.length ?? 0;
   const progresso = total > 0 ? Math.round((enviados.length / total) * 100) : 0;
 
-  // Envia um arquivo da fila
   const uploadArquivo = useCallback(
-    async (
-      doc: { id: number; nomeDocumento: string; categoria: string },
-      arquivo: ArquivoLocal
-    ) => {
+    async (doc: { id: number; nomeDocumento: string; categoria: string }, arquivo: ArquivoLocal) => {
       if (!operacaoId) return;
       if (arquivo.file.size > 16 * 1024 * 1024) {
         setFilaArquivos((prev) => ({
@@ -497,7 +506,6 @@ function Etapa3Documentos({
         toast.error(`${arquivo.file.name}: muito grande (máx. 16MB)`);
         return;
       }
-      // Marcar como enviando
       setFilaArquivos((prev) => ({
         ...prev,
         [doc.id]: (prev[doc.id] ?? []).map((a) =>
@@ -522,6 +530,7 @@ function Etapa3Documentos({
           ),
         }));
         refetch();
+        setResultadoConferencia(null);
       } catch (err: any) {
         setFilaArquivos((prev) => ({
           ...prev,
@@ -535,12 +544,8 @@ function Etapa3Documentos({
     [operacaoId, uploadMutation, refetch]
   );
 
-  // Adiciona arquivos selecionados à fila e inicia upload de cada um
   const handleFilesSelected = useCallback(
-    async (
-      doc: { id: number; nomeDocumento: string; categoria: string },
-      files: FileList
-    ) => {
+    async (doc: { id: number; nomeDocumento: string; categoria: string }, files: FileList) => {
       if (!operacaoId) return;
       const novosArquivos: ArquivoLocal[] = Array.from(files).map((file) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -551,7 +556,6 @@ function Etapa3Documentos({
         ...prev,
         [doc.id]: [...(prev[doc.id] ?? []), ...novosArquivos],
       }));
-      // Envia em sequencia para não sobrecarregar
       for (const arquivo of novosArquivos) {
         await uploadArquivo(doc, arquivo);
       }
@@ -559,12 +563,40 @@ function Etapa3Documentos({
     [operacaoId, uploadArquivo]
   );
 
-  // Remove arquivo da fila local (apenas os ainda não enviados ou com erro)
   const removerArquivo = (docId: number, arquivoId: string) => {
     setFilaArquivos((prev) => ({
       ...prev,
       [docId]: (prev[docId] ?? []).filter((a) => a.id !== arquivoId),
     }));
+  };
+
+  const handleConferir = async () => {
+    if (!operacaoId) return;
+    setConferindo(true);
+    try {
+      const resultado = await conferirMutation.mutateAsync({ operacaoId });
+      setResultadoConferencia(resultado);
+      if (resultado.aprovado) {
+        toast.success("Documentação completa! Você pode prosseguir.");
+        await atualizarMutation.mutateAsync({ id: operacaoId, etapaAtual: 4 });
+      } else {
+        toast.warning(`Documentação incompleta: ${resultado.pendencias.length} pendência(s) encontrada(s).`);
+      }
+    } catch (err: any) {
+      toast.error("Erro ao conferir documentação: " + err.message);
+    } finally {
+      setConferindo(false);
+    }
+  };
+
+  const handleSalvarRascunho = async () => {
+    if (!operacaoId) return;
+    try {
+      await atualizarMutation.mutateAsync({ id: operacaoId, statusRascunho: true, etapaAtual: 3 });
+      toast.success("Operação salva como rascunho.");
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
+    }
   };
 
   const formatBytes = (bytes: number) => {
@@ -573,11 +605,15 @@ function Etapa3Documentos({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const podeProsseguir = resultadoConferencia?.aprovado === true;
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-1">Documentos — {produto}</h2>
-        <p className="text-sm text-muted-foreground">Envie os documentos do checklist. Você pode anexar mais de um arquivo por item.</p>
+        <p className="text-sm text-muted-foreground">
+          Envie os documentos do checklist. Você pode anexar mais de um arquivo por item.
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -586,9 +622,42 @@ function Etapa3Documentos({
           <span className={cn("font-semibold", progresso === 100 ? "text-emerald-400" : "text-primary")}>{progresso}%</span>
         </div>
         <div className="h-2 bg-muted rounded-full overflow-hidden">
-          <div className={cn("h-full rounded-full transition-all duration-500", progresso === 100 ? "bg-emerald-500" : "bg-primary")} style={{ width: `${progresso}%` }} />
+          <div
+            className={cn("h-full rounded-full transition-all duration-500", progresso === 100 ? "bg-emerald-500" : "bg-primary")}
+            style={{ width: `${progresso}%` }}
+          />
         </div>
       </div>
+
+      {resultadoConferencia && (
+        <div className={cn(
+          "rounded-lg border p-4 space-y-3",
+          resultadoConferencia.aprovado
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : "border-yellow-500/30 bg-yellow-500/5"
+        )}>
+          <div className="flex items-center gap-2">
+            {resultadoConferencia.aprovado
+              ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              : <AlertTriangle className="w-5 h-5 text-yellow-400" />}
+            <p className={cn("font-medium text-sm", resultadoConferencia.aprovado ? "text-emerald-300" : "text-yellow-300")}>
+              {resultadoConferencia.aprovado ? "Documentação completa — pronto para prosseguir" : "Documentação incompleta"}
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground">{resultadoConferencia.resumo}</p>
+          {resultadoConferencia.pendencias.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-yellow-400 uppercase tracking-wider">Pendências:</p>
+              {resultadoConferencia.pendencias.map((p, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-yellow-300/80">
+                  <XCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-yellow-400" />
+                  {p}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3">
         {!documentos ? (
@@ -598,15 +667,18 @@ function Etapa3Documentos({
           </div>
         ) : documentos.map((doc) => {
           const arquivosDoc = filaArquivos[doc.id] ?? [];
-          const temEnviados = arquivosDoc.filter((a) => a.status === "enviado").length;
           const temEnviando = arquivosDoc.some((a) => a.status === "enviando");
+          const temEnviados = arquivosDoc.filter((a) => a.status === "enviado").length;
           const isEnviado = doc.estado !== "Pendente";
+          const docConferencia = null; // análise por documento removida na v2
           return (
-            <div key={doc.id} className={cn(
-              "rounded-lg border transition-colors",
-              isEnviado ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/40 bg-muted/10 hover:border-primary/30"
-            )}>
-              {/* Linha principal do item */}
+            <div
+              key={doc.id}
+              className={cn(
+                "rounded-lg border transition-colors",
+                isEnviado ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/40 bg-muted/10 hover:border-primary/30"
+              )}
+            >
               <div className="flex items-center justify-between p-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {isEnviado
@@ -614,17 +686,15 @@ function Etapa3Documentos({
                     : <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />}
                   <div className="min-w-0">
                     <p className="text-sm text-foreground truncate">{doc.nomeDocumento}</p>
-                    <p className="text-xs text-muted-foreground">{doc.categoria}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-muted-foreground">{doc.categoria}</p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {isEnviado && temEnviados === 0 && (
-                    <span className="text-xs text-emerald-400 hidden sm:block">Enviado</span>
-                  )}
                   {temEnviados > 0 && (
-                    <span className="text-xs text-emerald-400 hidden sm:block">{temEnviados} arquivo{temEnviados > 1 ? "s" : ""} enviado{temEnviados > 1 ? "s" : ""}</span>
+                    <span className="text-xs text-emerald-400 hidden sm:block">{temEnviados} arquivo{temEnviados > 1 ? "s" : ""}</span>
                   )}
-                  {/* Input oculto com multiple */}
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
@@ -654,7 +724,6 @@ function Etapa3Documentos({
                 </div>
               </div>
 
-              {/* Lista de arquivos anexados */}
               {arquivosDoc.length > 0 && (
                 <div className="px-3 pb-3 space-y-1.5">
                   <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Arquivos enviados</p>
@@ -697,14 +766,31 @@ function Etapa3Documentos({
           Voltar
         </Button>
         <div className="flex gap-3">
-          {progresso < 100 && (
-            <Button variant="outline" onClick={onNext} className="gap-2 text-muted-foreground text-sm">
-              Pular por agora
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          )}
-          <Button onClick={onNext} className="btn-primary gap-2">
-            {progresso === 100 ? "Continuar para Garantia IA" : "Continuar"}
+          <Button
+            variant="outline"
+            onClick={handleSalvarRascunho}
+            disabled={atualizarMutation.isPending}
+            className="gap-2 text-muted-foreground text-sm"
+          >
+            {atualizarMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            Salvar Rascunho
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleConferir}
+            disabled={conferindo || enviados.length === 0}
+            className="gap-2"
+          >
+            {conferindo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+            Conferir Documentação
+          </Button>
+          <Button
+            onClick={onNext}
+            disabled={!podeProsseguir}
+            className={cn("btn-primary gap-2", !podeProsseguir && "opacity-50 cursor-not-allowed")}
+            title={!podeProsseguir ? "Confira a documentação antes de prosseguir" : undefined}
+          >
+            Prosseguir
             <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
@@ -713,137 +799,306 @@ function Etapa3Documentos({
   );
 }
 
-// ─── Etapa 4: Garantia IA ─────────────────────────────────────────────────────
+// ─── Etapa 4: Resumo + Defesa Comercial ───────────────────────────────────────
 
-function Etapa4GarantiaIA({
+function Etapa4ResumoDefesa({
   codigoOperacao,
-  produto,
+  operacaoId: operacaoIdProp,
+  dadosOperacao,
   onBack,
   onNext,
 }: {
   codigoOperacao: string;
-  produto: string;
+  operacaoId: number;
+  dadosOperacao: Partial<DadosOperacao>;
   onBack: () => void;
   onNext: () => void;
 }) {
   const { data: ops } = trpc.operacoes.listar.useQuery({ busca: codigoOperacao });
-  const operacaoId = ops?.find((o) => o.codigoOperacao === codigoOperacao)?.id;
+  const op = ops?.find((o) => o.codigoOperacao === codigoOperacao);
+  const operacaoId = op?.id ?? operacaoIdProp;
 
-  const { data: garantias, refetch } = trpc.garantias.listar.useQuery(
-    { operacaoId: operacaoId! },
-    { enabled: !!operacaoId }
-  );
-  const preencherMutation = trpc.ia.preencherGarantia.useMutation();
-  const atualizarMutation = trpc.garantias.atualizar.useMutation();
-  const [editando, setEditando] = useState(false);
-  const [editData, setEditData] = useState<Record<string, string>>({});
+  const extrairPerfilMutation = trpc.ia.extrairPerfil.useMutation();
+  const gerarDefesaMutation = trpc.ia.gerarDefesaComercial.useMutation();
+  const atualizarMutation = trpc.operacoes.atualizar.useMutation();
 
-  const garantia = garantias?.[0];
+  const [perfil, setPerfil] = useState<{ success: boolean; perfil: Record<string, string> } | null>(null);
+  const [defesa, setDefesa] = useState<string>("");
+  const [editandoDefesa, setEditandoDefesa] = useState(false);
+  const [defesaEditada, setDefesaEditada] = useState("");
+  const [comentarioNovaDefesa, setComentarioNovaDefesa] = useState("");
+  const [showComentario, setShowComentario] = useState(false);
+  const [extraindo, setExtraindo] = useState(false);
+  const [defesaAprovada, setDefesaAprovada] = useState(false);
 
-  const handlePreencher = async () => {
+  const perfilExistente = (op as any)?.perfilExtraidoJson as Record<string, string> | null;
+  const defesaExistente = (op as any)?.defesaComercial as string | null;
+
+  const perfilAtual = perfil ? { perfil: perfil.perfil, garantia: {} as Record<string, string> } : (perfilExistente ? { perfil: perfilExistente, garantia: {} as Record<string, string> } : null);
+  const defesaAtual = defesa || defesaExistente || "";
+
+  const handleExtrairPerfil = async () => {
+    if (!operacaoId) return;
+    setExtraindo(true);
+    try {
+      const resultado = await extrairPerfilMutation.mutateAsync({ operacaoId });
+      setPerfil({ success: true, perfil: resultado.perfil ?? resultado });
+      toast.success("Perfil extraído com sucesso!");
+    } catch (err: any) {
+      toast.error("Erro ao extrair perfil: " + err.message);
+    } finally {
+      setExtraindo(false);
+    }
+  };
+
+  const handleGerarDefesa = async (comentario?: string) => {
     if (!operacaoId) return;
     try {
-      await preencherMutation.mutateAsync({ operacaoId });
-      toast.success("Garantia preenchida pela IA!");
-      refetch();
+      const resultado = await gerarDefesaMutation.mutateAsync({ operacaoId, comentario });
+      setDefesa(resultado.defesa);
+      setDefesaAprovada(false);
+      setShowComentario(false);
+      setComentarioNovaDefesa("");
+      toast.success("Defesa comercial gerada!");
     } catch (err: any) {
-      toast.error("Erro ao preencher garantia: " + err.message);
+      toast.error("Erro ao gerar defesa: " + err.message);
     }
   };
 
-  const handleSalvarEdicao = async () => {
-    if (!garantia) return;
+  const handleAprovarDefesa = async () => {
+    if (!operacaoId) return;
+    const textoFinal = editandoDefesa ? defesaEditada : defesaAtual;
     try {
-      await atualizarMutation.mutateAsync({ id: garantia.id, ...editData });
-      toast.success("Garantia atualizada!");
-      setEditando(false);
-      refetch();
+      await atualizarMutation.mutateAsync({
+        id: operacaoId,
+        defesaComercial: textoFinal,
+        defesaAprovada: true,
+        etapaAtual: 5,
+      });
+      setDefesaAprovada(true);
+      setEditandoDefesa(false);
+      toast.success("Defesa aprovada! Pode prosseguir.");
     } catch (err: any) {
-      toast.error("Erro ao salvar: " + err.message);
+      toast.error("Erro ao aprovar defesa: " + err.message);
     }
   };
+
+  const ltv = dadosOperacao.valorSolicitado && dadosOperacao.valorGarantia && parseFloat(dadosOperacao.valorGarantia.replace(",", ".")) > 0
+    ? ((parseFloat(dadosOperacao.valorSolicitado.replace(",", ".")) / parseFloat(dadosOperacao.valorGarantia.replace(",", "."))) * 100).toFixed(1)
+    : null;
+
+  const camposPerfil = [
+    { key: "nomeCompleto", label: "Nome Completo" },
+    { key: "cpf", label: "CPF" },
+    { key: "rg", label: "RG" },
+    { key: "dataNascimento", label: "Data de Nascimento" },
+    { key: "estadoCivil", label: "Estado Civil" },
+    { key: "profissao", label: "Profissão" },
+    { key: "rendaMediaMensal", label: "Renda Média Mensal" },
+    { key: "nomeConjuge", label: "Nome do Cônjuge" },
+    { key: "cpfConjuge", label: "CPF do Cônjuge" },
+    { key: "rgConjuge", label: "RG do Cônjuge" },
+  ];
 
   const camposGarantia = [
-    { key: "tipoImovel", label: "Tipo de Imóvel" },
-    { key: "endereco", label: "Endereço" },
-    { key: "cidade", label: "Cidade" },
-    { key: "estado", label: "Estado (UF)" },
-    { key: "matricula", label: "Matrícula" },
-    { key: "metragem", label: "Metragem" },
-    { key: "situacaoDocumental", label: "Situação Documental" },
+    { key: "matricula", label: "Nº da Matrícula" },
+    { key: "descricaoImovel", label: "Descrição do Imóvel" },
+    { key: "numeroIptu", label: "Nº do IPTU" },
     { key: "valorEstimado", label: "Valor Estimado" },
-    { key: "ltvEstimado", label: "LTV Estimado (%)" },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">Garantia — Preenchimento por IA</h2>
-        <p className="text-sm text-muted-foreground">A IA extrai os dados da garantia a partir dos documentos enviados. Você pode editar manualmente após.</p>
+        <h2 className="text-lg font-semibold text-foreground mb-1">Resumo da Operação + Defesa Comercial</h2>
+        <p className="text-sm text-muted-foreground">A IA extrai o perfil do tomador dos documentos e gera a defesa para as IFs.</p>
       </div>
 
-      {!garantia ? (
-        <div className="text-center py-10 space-y-4">
-          <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-            <Shield className="w-8 h-8 text-primary" />
-          </div>
-          <div>
-            <p className="text-foreground font-medium">Nenhuma garantia cadastrada ainda</p>
-            <p className="text-sm text-muted-foreground mt-1">Clique em "Preencher com IA" para extrair os dados automaticamente dos documentos enviados.</p>
-          </div>
-          <Button onClick={handlePreencher} disabled={preencherMutation.isPending || !operacaoId} className="btn-primary gap-2">
-            {preencherMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Analisando documentos...</> : <><Bot className="w-4 h-4" />Preencher com IA</>}
+      <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+        <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-yellow-300/80">
+          <strong>Aviso de Responsabilidade:</strong> O conteúdo gerado pela IA é uma sugestão e não substitui a análise crítica do analista humano. A aprovação final e a responsabilidade pela operação são sempre do profissional qualificado.
+        </p>
+      </div>
+
+      {/* Dados da Operação */}
+      <div className="border border-border/40 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 bg-muted/20 border-b border-border/30">
+          <h3 className="text-sm font-semibold text-foreground">Dados da Operação</h3>
+        </div>
+        <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-3">
+          {[
+            { label: "Produto", value: dadosOperacao.produto },
+            { label: "Valor Solicitado", value: dadosOperacao.valorSolicitado ? `R$ ${dadosOperacao.valorSolicitado}` : "—" },
+            { label: "Prazo", value: dadosOperacao.prazo ? `${dadosOperacao.prazo} meses` : "—" },
+            { label: "Finalidade", value: dadosOperacao.finalidade },
+            { label: "Valor da Garantia", value: dadosOperacao.valorGarantia ? `R$ ${dadosOperacao.valorGarantia}` : "—" },
+            { label: "LTV Estimado", value: ltv ? `${ltv}%` : "—" },
+          ].map(({ label, value }) => (
+            <div key={label} className="space-y-0.5">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-sm text-foreground font-medium">{value ?? "—"}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Perfil do Tomador */}
+      <div className="border border-border/40 rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border/30">
+          <h3 className="text-sm font-semibold text-foreground">Perfil do Tomador (extraído pela IA)</h3>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExtrairPerfil}
+            disabled={extraindo || !operacaoId}
+            className="gap-1.5 text-xs"
+          >
+            {extraindo ? <Loader2 className="w-3 h-3 animate-spin" /> : perfilAtual ? <RefreshCw className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+            {perfilAtual ? "Reextrair" : "Extrair com IA"}
           </Button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {garantia.preenchidoPorIa && (
-            <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
-              <Bot className="w-3.5 h-3.5" />
-              Preenchido automaticamente pela IA
-              {garantia.editadoManualmente && <span className="ml-1 text-muted-foreground">· editado manualmente</span>}
+        {perfilAtual ? (
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {camposPerfil.map(({ key, label }) => {
+                const valor = perfilAtual.perfil?.[key];
+                if (!valor || valor === "Informação não localizada automaticamente") return null;
+                return (
+                  <div key={key} className="space-y-0.5">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-sm text-foreground">{valor}</p>
+                  </div>
+                );
+              })}
             </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {camposGarantia.map(({ key, label }) => {
-              const valor = (garantia as any)[key];
-              return (
-                <div key={key} className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">{label}</Label>
-                  {editando ? (
-                    <Input value={editData[key] ?? valor ?? ""} onChange={(e) => setEditData((d) => ({ ...d, [key]: e.target.value }))} className="bg-background/50 text-sm h-8" />
-                  ) : (
-                    <p className="text-sm text-foreground bg-muted/20 rounded px-2 py-1.5 min-h-[32px]">
-                      {valor ?? <span className="text-muted-foreground/50">—</span>}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
+            <div className="border-t border-border/30 pt-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Dados da Garantia</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {camposGarantia.map(({ key, label }) => {
+                  const valor = perfilAtual.garantia?.[key];
+                  return (
+                    <div key={key} className="space-y-0.5">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="text-sm text-foreground">{valor ?? <span className="text-muted-foreground/50 italic text-xs">Não localizado</span>}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3 pt-2">
-            {editando ? (
+        ) : (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            <Bot className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+            Clique em "Extrair com IA" para extrair automaticamente os dados do tomador e da garantia a partir dos documentos enviados.
+          </div>
+        )}
+      </div>
+
+      {/* Defesa Comercial */}
+      <div className="border border-border/40 rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border/30">
+          <h3 className="text-sm font-semibold text-foreground">Defesa Comercial</h3>
+          <div className="flex items-center gap-2">
+            {defesaAtual && (
               <>
-                <Button size="sm" onClick={handleSalvarEdicao} disabled={atualizarMutation.isPending} className="btn-primary gap-1.5">
-                  {atualizarMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Salvar Edição
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { navigator.clipboard.writeText(editandoDefesa ? defesaEditada : defesaAtual); toast.success("Copiado!"); }}
+                  className="h-7 px-2 gap-1 text-xs text-muted-foreground"
+                >
+                  <Copy className="w-3 h-3" />Copiar
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setEditando(false)}>Cancelar</Button>
-              </>
-            ) : (
-              <>
-                <Button size="sm" variant="outline" onClick={() => { setEditando(true); setEditData({}); }} className="gap-1.5">
-                  <Edit3 className="w-3.5 h-3.5" />Editar
-                </Button>
-                <Button size="sm" variant="outline" onClick={handlePreencher} disabled={preencherMutation.isPending} className="gap-1.5">
-                  {preencherMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  Refazer com IA
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setEditandoDefesa(!editandoDefesa); setDefesaEditada(defesaAtual); }}
+                  className="h-7 px-2 gap-1 text-xs text-muted-foreground"
+                >
+                  <Edit3 className="w-3 h-3" />{editandoDefesa ? "Cancelar" : "Editar"}
                 </Button>
               </>
             )}
           </div>
         </div>
-      )}
+        <div className="p-4 space-y-4">
+          {defesaAtual ? (
+            <>
+              {editandoDefesa ? (
+                <Textarea
+                  value={defesaEditada}
+                  onChange={(e) => setDefesaEditada(e.target.value)}
+                  className="bg-background/50 min-h-[200px] resize-none text-sm"
+                  maxLength={2000}
+                />
+              ) : (
+                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{defesaAtual}</p>
+              )}
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowComentario(!showComentario)}
+                  className="gap-1.5 text-xs"
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  Gerar nova defesa
+                </Button>
+                {defesaAprovada ? (
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" />Defesa aprovada
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={handleAprovarDefesa}
+                    disabled={atualizarMutation.isPending}
+                    className="btn-primary gap-1.5 text-xs"
+                  >
+                    {atualizarMutation.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                    <CheckCircle2 className="w-3 h-3" />
+                    Aprovar Defesa
+                  </Button>
+                )}
+              </div>
+              {showComentario && (
+                <div className="space-y-2 p-3 bg-muted/20 rounded-lg border border-border/30">
+                  <Label className="text-xs text-muted-foreground">O que deve mudar na nova defesa? (opcional)</Label>
+                  <Textarea
+                    value={comentarioNovaDefesa}
+                    onChange={(e) => setComentarioNovaDefesa(e.target.value)}
+                    placeholder="Ex: Enfatize mais a capacidade financeira, mencione o histórico de pagamentos..."
+                    className="bg-background/50 min-h-[80px] resize-none text-sm"
+                    rows={3}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleGerarDefesa(comentarioNovaDefesa || undefined)}
+                    disabled={gerarDefesaMutation.isPending}
+                    className="btn-primary gap-1.5 text-xs"
+                  >
+                    {gerarDefesaMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    Gerar nova defesa
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-6 space-y-3">
+              <Bot className="w-10 h-10 mx-auto text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Clique em "Gerar Defesa" para criar a defesa comercial baseada em todas as informações da operação.</p>
+              <Button
+                onClick={() => handleGerarDefesa()}
+                disabled={gerarDefesaMutation.isPending || !operacaoId}
+                className="btn-primary gap-2"
+              >
+                {gerarDefesaMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Gerando...</> : <><Bot className="w-4 h-4" />Gerar Defesa</>}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="flex items-center justify-between pt-2">
         <Button variant="outline" onClick={onBack} className="gap-2">
@@ -851,13 +1106,19 @@ function Etapa4GarantiaIA({
           Voltar
         </Button>
         <div className="flex gap-3">
-          {!garantia && (
+          {!defesaAprovada && defesaAtual && (
             <Button variant="outline" onClick={onNext} className="gap-2 text-muted-foreground text-sm">
-              Pular<ArrowRight className="w-4 h-4" />
+              Pular
+              <ArrowRight className="w-4 h-4" />
             </Button>
           )}
-          <Button onClick={onNext} className="btn-primary gap-2">
-            Continuar para Revisão<ArrowRight className="w-4 h-4" />
+          <Button
+            onClick={onNext}
+            disabled={!defesaAprovada && !defesaAtual}
+            className="btn-primary gap-2"
+          >
+            Continuar para SCR / Enviar
+            <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
@@ -865,176 +1126,82 @@ function Etapa4GarantiaIA({
   );
 }
 
-// ─── Etapa 5: Revisão Completa ────────────────────────────────────────────────
+// ─── Etapa 5: Termo SCR + Enviar para Análise ─────────────────────────────────
 
-function Etapa5RevisaoCompleta({
+function Etapa5ScrEnviar({
   codigoOperacao,
-  onBack,
-  onNext,
-}: {
-  codigoOperacao: string;
-  onBack: () => void;
-  onNext: () => void;
-}) {
-  const { data: ops } = trpc.operacoes.listar.useQuery({ busca: codigoOperacao });
-  const operacaoId = ops?.find((o) => o.codigoOperacao === codigoOperacao)?.id;
-
-  const { data: analises, refetch } = trpc.ia.listar.useQuery(
-    { operacaoId: operacaoId! },
-    { enabled: !!operacaoId }
-  );
-  const gerarMutation = trpc.ia.gerarRevisaoCompleta.useMutation();
-  const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<Record<string, string>>({});
-
-  const analiseRevisao = analises?.find((a) => a.camada === "revisao" && a.statusProcessamento === "concluido");
-  const resultado = analiseRevisao?.resultadoJson as Record<string, string> | null;
-
-  const handleGerar = async () => {
-    if (!operacaoId) return;
-    try {
-      await gerarMutation.mutateAsync({ operacaoId });
-      toast.success("Revisão gerada com sucesso!");
-      refetch();
-    } catch (err: any) {
-      toast.error("Erro ao gerar revisão: " + err.message);
-    }
-  };
-
-  const handleCopiar = (texto: string) => {
-    navigator.clipboard.writeText(texto);
-    toast.success("Copiado!");
-  };
-
-  const camposRevisao = [
-    { key: "resumoOperacional", label: "Resumo Operacional" },
-    { key: "parecerComercial", label: "Parecer Comercial" },
-    { key: "defesaOperacao", label: "Defesa da Operação" },
-    { key: "analiseDocumental", label: "Análise Documental" },
-    { key: "conclusao", label: "Conclusão e Recomendação" },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">Revisão Completa — Estilo Comitê de Crédito</h2>
-        <p className="text-sm text-muted-foreground">A IA gera a revisão completa para apresentação às Instituições Financeiras.</p>
-      </div>
-
-      <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-        <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-yellow-300/80">
-          <strong>Aviso de Responsabilidade:</strong> O conteúdo gerado pela IA é uma sugestão de defesa comercial e não substitui a análise crítica do analista humano responsável. A aprovação final e a responsabilidade pela operação são sempre do profissional qualificado.
-        </p>
-      </div>
-
-      {!resultado ? (
-        <div className="text-center py-10 space-y-4">
-          <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-            <Bot className="w-8 h-8 text-primary" />
-          </div>
-          <div>
-            <p className="text-foreground font-medium">Revisão não gerada ainda</p>
-            <p className="text-sm text-muted-foreground mt-1">Clique em "Gerar Revisão" para criar a análise completa.</p>
-          </div>
-          <Button onClick={handleGerar} disabled={gerarMutation.isPending || !operacaoId} className="btn-primary gap-2">
-            {gerarMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Gerando revisão...</> : <><Bot className="w-4 h-4" />Gerar Revisão Completa</>}
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {camposRevisao.map(({ key, label }) => {
-            const valor = editValues[key] ?? resultado[key] ?? "";
-            const isEditando = editandoCampo === key;
-            return (
-              <div key={key} className="border border-border/40 rounded-lg overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2.5 bg-muted/20 border-b border-border/30">
-                  <h3 className="text-sm font-medium text-foreground">{label}</h3>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => handleCopiar(valor)} className="h-7 px-2 gap-1 text-xs text-muted-foreground hover:text-foreground">
-                      <Copy className="w-3 h-3" />Copiar
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => { if (isEditando) { setEditandoCampo(null); } else { setEditandoCampo(key); setEditValues((v) => ({ ...v, [key]: valor })); } }} className="h-7 px-2 gap-1 text-xs text-muted-foreground hover:text-foreground">
-                      <Edit3 className="w-3 h-3" />{isEditando ? "Fechar" : "Editar"}
-                    </Button>
-                  </div>
-                </div>
-                <div className="p-4">
-                  {isEditando ? (
-                    <Textarea value={editValues[key] ?? ""} onChange={(e) => setEditValues((v) => ({ ...v, [key]: e.target.value }))} className="bg-background/50 min-h-[120px] resize-none text-sm" />
-                  ) : (
-                    <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{valor}</p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          <div className="flex items-center gap-3">
-            <Button size="sm" variant="outline" onClick={handleGerar} disabled={gerarMutation.isPending} className="gap-1.5">
-              {gerarMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              Regenerar
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => { const texto = camposRevisao.map(({ key, label }) => `## ${label}\n\n${editValues[key] ?? resultado[key] ?? ""}`).join("\n\n---\n\n"); handleCopiar(texto); }} className="gap-1.5">
-              <Copy className="w-3.5 h-3.5" />Copiar Tudo
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between pt-2">
-        <Button variant="outline" onClick={onBack} className="gap-2">
-          <ArrowLeft className="w-4 h-4" />Voltar
-        </Button>
-        <div className="flex gap-3">
-          {!resultado && (
-            <Button variant="outline" onClick={onNext} className="gap-2 text-muted-foreground text-sm">
-              Pular<ArrowRight className="w-4 h-4" />
-            </Button>
-          )}
-          <Button onClick={onNext} className="btn-primary gap-2">
-            Continuar para Termo SCR<ArrowRight className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Etapa 6: Termo SCR ───────────────────────────────────────────────────────
-
-function Etapa6TermoSCR({
-  codigoOperacao,
+  operacaoId: operacaoIdProp,
   nomeCliente,
-  estadoCivil,
+  telefoneTomador,
+  emailTomador,
 }: {
   codigoOperacao: string;
+  operacaoId: number;
   nomeCliente: string;
-  estadoCivil: string;
+  telefoneTomador: string;
+  emailTomador: string;
 }) {
   const { data: ops } = trpc.operacoes.listar.useQuery({ busca: codigoOperacao });
-  const operacaoId = ops?.find((o) => o.codigoOperacao === codigoOperacao)?.id;
+  const op = ops?.find((o) => o.codigoOperacao === codigoOperacao);
+  const operacaoId = op?.id ?? operacaoIdProp;
 
-  const { data: termo, refetch } = trpc.termoScr.obter.useQuery(
+  const { data: termo, refetch: refetchTermo } = trpc.termoScr.obter.useQuery(
     { operacaoId: operacaoId! },
     { enabled: !!operacaoId }
   );
-  const criarMutation = trpc.termoScr.criar.useMutation();
+  const criarTermoMutation = trpc.termoScr.criar.useMutation();
+  const enviarAnalise = trpc.ia.enviarParaAnalise.useMutation();
   const [, navigate] = useLocation();
+  const [enviado, setEnviado] = useState(false);
 
-  const temConjuge = estadoCivil === "Casado" || estadoCivil === "União Estável";
+  // Dados do cônjuge: campos diretos da op ou extraídos pela IA
+  const perfilExtrado = (op as any)?.perfilExtraidoJson as { perfil: Record<string, string>; garantia: Record<string, string> } | null;
+  const estadoCivilOp = (op as any)?.estadoCivil ?? perfilExtrado?.perfil?.estadoCivil ?? "";
+  const temConjuge = estadoCivilOp === "Casado" || estadoCivilOp === "União Estável"
+    || !!(perfilExtrado?.perfil?.nomeConjuge && perfilExtrado.perfil.nomeConjuge !== "Informação não localizada automaticamente");
+  const nomeConjuge = (op as any)?.nomeConjuge ?? perfilExtrado?.perfil?.nomeConjuge;
+  const telefoneConjuge = (op as any)?.telefoneConjuge ?? perfilExtrado?.perfil?.telefoneConjuge;
+  const emailConjuge = (op as any)?.emailConjuge ?? perfilExtrado?.perfil?.emailConjuge;
 
-  const handleCriar = async () => {
+  const linkCompleto = termo ? `${window.location.origin}${termo.linkUnico}` : "";
+
+  const handleCriarTermo = async () => {
     if (!operacaoId) return;
     try {
-      await criarMutation.mutateAsync({ operacaoId });
+      await criarTermoMutation.mutateAsync({ operacaoId });
       toast.success("Termo SCR gerado com sucesso!");
-      refetch();
+      refetchTermo();
     } catch (err: any) {
       toast.error("Erro ao gerar termo: " + err.message);
     }
   };
 
-  const linkCompleto = termo ? `${window.location.origin}${termo.linkUnico}` : "";
+  const handleEnviarWhatsApp = (telefone: string, nome: string) => {
+    const tel = telefone.replace(/\D/g, "");
+    const msg = encodeURIComponent(
+      `Olá ${nome}! Para darmos continuidade à sua operação de crédito com a Ativa Soluções, precisamos da sua assinatura digital no Termo de Autorização SCR/LGPD.\n\nClique no link abaixo para assinar:\n${linkCompleto}\n\nO link é válido por 30 dias. Em caso de dúvidas, entre em contato conosco.`
+    );
+    window.open(`https://wa.me/55${tel}?text=${msg}`, "_blank");
+  };
+
+  const handleEnviarEmail = (email: string, nome: string) => {
+    const assunto = encodeURIComponent(`Termo SCR/LGPD — Operação ${codigoOperacao}`);
+    const corpo = encodeURIComponent(
+      `Olá ${nome},\n\nPara darmos continuidade à sua operação de crédito com a Ativa Soluções, precisamos da sua assinatura digital no Termo de Autorização SCR/LGPD.\n\nAcesse o link abaixo para assinar:\n${linkCompleto}\n\nO link é válido por 30 dias.\n\nAtenciosamente,\nEquipe Ativa Soluções`
+    );
+    window.open(`mailto:${email}?subject=${assunto}&body=${corpo}`, "_blank");
+  };
+
+  const handleEnviarParaAnalise = async () => {
+    if (!operacaoId) return;
+    try {
+      await enviarAnalise.mutateAsync({ operacaoId });
+      setEnviado(true);
+      toast.success("Operação enviada para análise! A Renata foi notificada.");
+    } catch (err: any) {
+      toast.error("Erro ao enviar para análise: " + err.message);
+    }
+  };
 
   const statusColor: Record<string, string> = {
     "Aguardando assinatura": "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
@@ -1042,83 +1209,189 @@ function Etapa6TermoSCR({
     "Assinado completo": "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
   };
 
+  if (enviado) {
+    return (
+      <div className="text-center py-12 space-y-4">
+        <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto">
+          <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+        </div>
+        <div>
+          <h3 className="text-xl font-semibold text-foreground">Operação enviada para análise!</h3>
+          <p className="text-sm text-muted-foreground mt-2">
+            A operação <span className="font-mono text-primary">{codigoOperacao}</span> foi enviada para validação e distribuição às Instituições Financeiras.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">A Renata foi notificada automaticamente.</p>
+        </div>
+        <Button onClick={() => navigate("/operacoes")} className="btn-primary gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          Ver Minhas Operações
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">Termo de Autorização SCR</h2>
-        <p className="text-sm text-muted-foreground">Gere o link único de assinatura digital do Termo SCR para enviar ao cliente{temConjuge ? " e cônjuge" : ""}.</p>
-      </div>
-
-      <div className="p-4 bg-muted/20 border border-border/40 rounded-lg space-y-2">
-        <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-primary" />
-          O que é o Termo SCR?
-        </h3>
+        <h2 className="text-lg font-semibold text-foreground mb-1">Termo SCR/LGPD + Enviar para Análise</h2>
         <p className="text-sm text-muted-foreground">
-          O Termo de Autorização para Consulta ao SCR do Banco Central é obrigatório para que as IFs possam consultar o histórico de crédito do tomador. O cliente{temConjuge ? " e o cônjuge precisam" : " precisa"} assinar digitalmente antes do envio às IFs.
+          Gere o link de assinatura e envie a operação para validação da Renata.
         </p>
       </div>
 
-      {!termo ? (
-        <div className="text-center py-8 space-y-4">
-          <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-            <Send className="w-8 h-8 text-primary" />
-          </div>
-          <div>
-            <p className="text-foreground font-medium">Termo SCR não gerado</p>
-            <p className="text-sm text-muted-foreground mt-1">Clique em "Gerar Termo SCR" para criar o link único de assinatura.</p>
-          </div>
-          <Button onClick={handleCriar} disabled={criarMutation.isPending || !operacaoId} className="btn-primary gap-2">
-            {criarMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Gerando...</> : <><Send className="w-4 h-4" />Gerar Termo SCR</>}
-          </Button>
+      <div className="border border-border/40 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 bg-muted/20 border-b border-border/30">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" />
+            Termo de Autorização SCR/LGPD
+          </h3>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium w-fit", statusColor[termo.status] ?? "text-muted-foreground bg-muted/20 border-border/30")}>
-            {termo.status}
-          </div>
-          <div className="space-y-2">
-            <Label className="text-sm text-muted-foreground">Link de Assinatura</Label>
-            <div className="flex items-center gap-2">
-              <Input value={linkCompleto} readOnly className="bg-background/50 text-sm font-mono text-primary" />
-              <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(linkCompleto); toast.success("Link copiado!"); }} className="gap-1.5 flex-shrink-0">
-                <Copy className="w-3.5 h-3.5" />Copiar
+        <div className="p-4 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            O Termo de Autorização para Consulta ao SCR do Banco Central é obrigatório para que as IFs possam consultar o histórico de crédito do tomador.
+          </p>
+
+          {!termo ? (
+            <div className="text-center py-4 space-y-3">
+              <Button
+                onClick={handleCriarTermo}
+                disabled={criarTermoMutation.isPending || !operacaoId}
+                className="btn-primary gap-2"
+              >
+                {criarTermoMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Gerando...</> : <><Send className="w-4 h-4" />Gerar Termo SCR</>}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Válido por 30 dias. Envie ao cliente{temConjuge ? " e ao cônjuge" : ""} via WhatsApp ou e-mail.</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3 border border-border/40 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Tomador</p>
-              <p className="text-sm font-medium text-foreground">{nomeCliente}</p>
-              {termo.assinadoClienteEm ? (
-                <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Assinado em {new Date(termo.assinadoClienteEm).toLocaleDateString("pt-BR")}</p>
-              ) : (
-                <p className="text-xs text-yellow-400 mt-1">Aguardando assinatura</p>
+          ) : (
+            <div className="space-y-4">
+              <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium w-fit", statusColor[termo.status] ?? "text-muted-foreground bg-muted/20 border-border/30")}>
+                {termo.status}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm text-muted-foreground">Link de Assinatura</Label>
+                <div className="flex items-center gap-2">
+                  <Input value={linkCompleto} readOnly className="bg-background/50 text-sm font-mono text-primary" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { navigator.clipboard.writeText(linkCompleto); toast.success("Link copiado!"); }}
+                    className="gap-1.5 flex-shrink-0"
+                  >
+                    <Copy className="w-3.5 h-3.5" />Copiar
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Válido por 30 dias.</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Enviar para o Tomador</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleEnviarWhatsApp(telefoneTomador, nomeCliente)}
+                    className="gap-1.5 text-sm text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                  >
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    WhatsApp — {nomeCliente}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleEnviarEmail(emailTomador, nomeCliente)}
+                    className="gap-1.5 text-sm"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    E-mail — {nomeCliente}
+                  </Button>
+                </div>
+              </div>
+
+              {temConjuge && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Enviar para o Cônjuge</p>
+                  <div className="flex flex-wrap gap-2">
+                    {telefoneConjuge && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEnviarWhatsApp(telefoneConjuge, nomeConjuge ?? "Cônjuge")}
+                        className="gap-1.5 text-sm text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                        </svg>
+                        WhatsApp — {nomeConjuge ?? "Cônjuge"}
+                      </Button>
+                    )}
+                    {emailConjuge && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEnviarEmail(emailConjuge, nomeConjuge ?? "Cônjuge")}
+                        className="gap-1.5 text-sm"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        E-mail — {nomeConjuge ?? "Cônjuge"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
               )}
-            </div>
-            {temConjuge && (
-              <div className="p-3 border border-border/40 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Cônjuge</p>
-                <p className="text-sm font-medium text-foreground">—</p>
-                {termo.assinadoConjugeEm ? (
-                  <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Assinado em {new Date(termo.assinadoConjugeEm).toLocaleDateString("pt-BR")}</p>
-                ) : (
-                  <p className="text-xs text-yellow-400 mt-1">Aguardando assinatura</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3 border border-border/40 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Tomador</p>
+                  <p className="text-sm font-medium text-foreground">{nomeCliente}</p>
+                  {termo.assinadoClienteEm ? (
+                    <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />Assinado em {new Date(termo.assinadoClienteEm).toLocaleDateString("pt-BR")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-yellow-400 mt-1">Aguardando assinatura</p>
+                  )}
+                </div>
+                {temConjuge && (
+                  <div className="p-3 border border-border/40 rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Cônjuge</p>
+                    <p className="text-sm font-medium text-foreground">{nomeConjuge ?? "—"}</p>
+                    {termo.assinadoConjugeEm ? (
+                      <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />Assinado em {new Date(termo.assinadoConjugeEm).toLocaleDateString("pt-BR")}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-yellow-400 mt-1">Aguardando assinatura</p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="border border-primary/20 rounded-lg p-4 bg-primary/5 space-y-3">
+        <div className="flex items-start gap-3">
+          <Send className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Enviar para Análise</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Ao clicar, a operação será enviada para a Renata com notificação automática. Ela receberá um alerta informando que há uma nova operação para validação e distribuição às Instituições Financeiras.
+            </p>
           </div>
         </div>
-      )}
-
-      <div className="border-t border-border/30 pt-6 flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Operação <span className="font-mono text-primary">{codigoOperacao}</span> cadastrada com sucesso.
-        </p>
-        <Button onClick={() => navigate("/operacoes")} className="btn-primary gap-2">
-          <CheckCircle2 className="w-4 h-4" />
-          Concluir e Ver Operações
+        <Button
+          onClick={handleEnviarParaAnalise}
+          disabled={enviarAnalise.isPending || !operacaoId}
+          className="btn-primary gap-2 w-full sm:w-auto"
+        >
+          {enviarAnalise.isPending ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />Enviando...</>
+          ) : (
+            <><Send className="w-4 h-4" />Enviar para Análise</>
+          )}
         </Button>
       </div>
     </div>
@@ -1127,14 +1400,22 @@ function Etapa6TermoSCR({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function FieldInput({ label, value, onChange, placeholder, error, type = "text" }: {
+function FieldInput({
+  label, value, onChange, placeholder, error, type = "text",
+}: {
   label: string; value: string; onChange: (v: string) => void;
   placeholder?: string; error?: string; type?: string;
 }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-sm text-muted-foreground">{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cn("bg-background/50", error && "border-red-500")} />
+      <Input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={cn("bg-background/50", error && "border-red-500")}
+      />
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>
   );
@@ -1143,7 +1424,10 @@ function FieldInput({ label, value, onChange, placeholder, error, type = "text" 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => { const result = reader.result as string; resolve(result.split(",")[1]); };
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1]);
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
