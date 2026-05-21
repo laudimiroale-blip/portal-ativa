@@ -46,6 +46,7 @@ interface DadosOperacao {
   prazo: number;
   finalidade: string;
   contextoOperacao: string;
+  responsavelOperacionalId?: number;
 }
 
 interface ArquivoLocal {
@@ -271,6 +272,7 @@ function Etapa2DadosOperacao({
 }) {
   const [erros, setErros] = useState<Record<string, string>>({});
   const criarMutation = trpc.operacoes.criar.useMutation();
+  const { data: equipeInterna } = trpc.usuarios.listarAdminOperacional.useQuery();
   const [, navigate] = useLocation();
 
   const set = (field: keyof DadosOperacao, value: any) => {
@@ -306,6 +308,7 @@ function Etapa2DadosOperacao({
         contextoOperacao: dados.contextoOperacao,
         statusRascunho: rascunho,
         etapaAtual: rascunho ? 2 : 3,
+        responsavelOperacionalId: dados.responsavelOperacionalId,
       });
       toast.success(`Operação ${result.codigoOperacao} criada!`);
       if (rascunho) {
@@ -403,6 +406,29 @@ function Etapa2DadosOperacao({
             <span className="font-semibold text-primary">{ltv}%</span>
             <span className="text-muted-foreground ml-2 text-xs">(valor solicitado ÷ valor da garantia)</span>
           </div>
+        </div>
+      )}
+
+      {/* Responsável Operacional — visível apenas para admin/operacional */}
+      {equipeInterna && equipeInterna.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-sm text-muted-foreground">Responsável Operacional</Label>
+          <Select
+            value={dados.responsavelOperacionalId ? String(dados.responsavelOperacionalId) : ""}
+            onValueChange={(v) => set("responsavelOperacionalId", v && v !== "unassigned" ? Number(v) : undefined)}
+          >
+            <SelectTrigger className="bg-background/50">
+              <SelectValue placeholder="Selecione o responsável interno..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Sem responsável definido</SelectItem>
+              {equipeInterna.map((u) => (
+                <SelectItem key={u.id} value={String(u.id)}>
+                  {u.name} <span className="text-muted-foreground text-xs ml-1 capitalize">({u.perfil})</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 

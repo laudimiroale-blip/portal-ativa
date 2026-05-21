@@ -117,6 +117,7 @@ export async function getOperacoes(filters?: {
   produto?: string;
   prioridade?: string;
   busca?: string;
+  responsavelOperacionalId?: number;
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -127,6 +128,7 @@ export async function getOperacoes(filters?: {
   if (filters?.statusMacro) conditions.push(eq(operacoes.statusMacro, filters.statusMacro as any));
   if (filters?.produto) conditions.push(eq(operacoes.produto, filters.produto as any));
   if (filters?.prioridade) conditions.push(eq(operacoes.prioridade, filters.prioridade as any));
+  if (filters?.responsavelOperacionalId) conditions.push(eq(operacoes.responsavelOperacionalId, filters.responsavelOperacionalId));
   if (filters?.busca) {
     const busca = `%${filters.busca}%`;
     const orClause = or(
@@ -600,4 +602,72 @@ export async function softDeleteUsuario(id: number) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
   await db.update(users).set({ deletedAt: new Date(), ativo: false }).where(eq(users.id, id));
+}
+// ─── IFs: helpers adicionais ─────────────────────────────────────────────────
+export async function getUsuariosAdminOperacional() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ id: users.id, name: users.name, perfil: users.perfil })
+    .from(users)
+    .where(and(
+      or(eq(users.perfil, "admin"), eq(users.perfil, "operacional")),
+      eq(users.ativo, true),
+      isNull(users.deletedAt)
+    ))
+    .orderBy(users.name);
+}
+export async function getAdmins() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(and(eq(users.perfil, "admin"), eq(users.ativo, true), isNull(users.deletedAt)));
+}
+export async function getIFsAtivas() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({ id: ifCadastros.id, nome: ifCadastros.nome, cnpj: ifCadastros.cnpj })
+    .from(ifCadastros)
+    .where(and(eq(ifCadastros.status, "Ativa"), isNull(ifCadastros.deletedAt)))
+    .orderBy(ifCadastros.nome);
+}
+export async function getMetricasPorIF(ifId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const distribs = await db
+    .select()
+    .from(ifDistribuicoes)
+    .where(eq(ifDistribuicoes.ifId, ifId));
+  const totalEnviadas = distribs.length;
+  const totalAprovadas = distribs.filter((d) => d.statusRetorno === "Aprovada").length;
+  const totalReprovadas = distribs.filter((d) => d.statusRetorno === "Reprovada").length;
+  // SLA médio: horas entre dataEnvio e updatedAt para distribuições com retorno
+  const comRetorno = distribs.filter((d) => d.statusRetorno === "Aprovada" || d.statusRetorno === "Reprovada");
+  const slaMedioHoras = comRetorno.length > 0
+    ? Math.round(comRetorno.reduce((acc, d) => {
+        const horas = (new Date(d.updatedAt).getTime() - new Date(d.dataEnvio).getTime()) / (1000 * 60 * 60);
+        return acc + horas;
+      }, 0) / comRetorno.length)
+    : null;
+  return { totalEnviadas, totalAprovadas, totalReprovadas, slaMedioHoras };
+}
+export async function getHistoricoDistribuicoesByIF(ifId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      dist: ifDistribuicoes,
+      codigoOperacao: operacoes.codigoOperacao,
+      nomeCliente: operacoes.nomeCliente,
+      produto: operacoes.produto,
+      valorSolicitado: operacoes.valorSolicitado,
+      statusMacro: operacoes.statusMacro,
+    })
+    .from(ifDistribuicoes)
+    .leftJoin(operacoes, eq(ifDistribuicoes.operacaoId, operacoes.id))
+    .where(eq(ifDistribuicoes.ifId, ifId))
+    .orderBy(desc(ifDistribuicoes.dataEnvio));
 }

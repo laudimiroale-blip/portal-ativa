@@ -25,6 +25,8 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const PRODUTOS = ["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"] as const;
 
@@ -58,6 +60,111 @@ type Condicao = {
   valorMaximo?: string | null;
   observacoes?: string | null;
 };
+
+// ─── Métricas por IF ─────────────────────────────────────────────────────────
+
+function MetricasIF({ ifId }: { ifId: number }) {
+  const { data: metricas, isLoading } = trpc.ifCadastros.metricasPorIF.useQuery({ ifId });
+
+  if (isLoading) return <div className="h-16 bg-[#1a1a1a] animate-pulse rounded" />;
+
+  if (!metricas || metricas.totalEnviadas === 0) {
+    return (
+      <div className="text-center py-6 text-[#555] text-xs">
+        <Building2 className="w-5 h-5 mx-auto mb-1 opacity-30" />
+        Nenhuma operação distribuída para esta IF ainda.
+      </div>
+    );
+  }
+
+  const taxaAprovacao = metricas.totalEnviadas > 0
+    ? ((metricas.totalAprovadas / metricas.totalEnviadas) * 100).toFixed(0)
+    : "0";
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {[
+        { label: "Enviadas", value: metricas.totalEnviadas, color: "text-[#C9A84C]" },
+        { label: "Aprovadas", value: metricas.totalAprovadas, color: "text-green-400" },
+        { label: "Reprovadas", value: metricas.totalReprovadas, color: "text-red-400" },
+        { label: "Taxa Aprovação", value: `${taxaAprovacao}%`, color: "text-blue-400" },
+      ].map((m) => (
+        <div key={m.label} className="bg-[#1a1a1a] rounded-lg p-3 border border-[#C9A84C]/10">
+          <p className="text-[10px] text-[#666] mb-1">{m.label}</p>
+          <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
+        </div>
+      ))}
+      {metricas.slaMedioHoras !== null && (
+        <div className="col-span-2 md:col-span-4 bg-[#1a1a1a] rounded-lg p-3 border border-[#C9A84C]/10">
+          <p className="text-[10px] text-[#666] mb-1">SLA Médio de Retorno</p>
+          <p className="text-sm font-semibold text-[#C9A84C]">
+            {metricas.slaMedioHoras < 24
+              ? `${metricas.slaMedioHoras}h`
+              : `${Math.round(metricas.slaMedioHoras / 24)} dias`}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Histórico de Distribuições por IF ──────────────────────────────────────
+
+function HistoricoDistribuicoes({ ifId }: { ifId: number }) {
+  const { data: historico, isLoading } = trpc.ifCadastros.historicoDistribuicoes.useQuery({ ifId });
+
+  if (isLoading) return <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-[#1a1a1a] animate-pulse rounded" />)}</div>;
+
+  if (!historico || historico.length === 0) {
+    return (
+      <div className="text-center py-6 text-[#555] text-xs">
+        <Building2 className="w-5 h-5 mx-auto mb-1 opacity-30" />
+        Nenhum histórico de distribuição para esta IF.
+      </div>
+    );
+  }
+
+  const STATUS_COLORS_HIST: Record<string, string> = {
+    Aguardando: "text-yellow-400",
+    "Em análise": "text-blue-400",
+    Aprovado: "text-green-400",
+    Reprovado: "text-red-400",
+    "Stand-by": "text-[#888]",
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-[#C9A84C]/20">
+            <th className="text-left py-2 pr-3 text-[#666] font-medium">Código</th>
+            <th className="text-left py-2 pr-3 text-[#666] font-medium">Cliente</th>
+            <th className="text-left py-2 pr-3 text-[#666] font-medium">Produto</th>
+            <th className="text-left py-2 pr-3 text-[#666] font-medium">Envio</th>
+            <th className="text-left py-2 text-[#666] font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#C9A84C]/10">
+          {historico.map((h) => (
+            <tr key={h.dist.id} className="hover:bg-[#C9A84C]/5 transition-colors">
+              <td className="py-2 pr-3 font-mono text-[#C9A84C]">{h.codigoOperacao ?? "—"}</td>
+              <td className="py-2 pr-3 text-[#FAFAFA]">{h.nomeCliente ?? "—"}</td>
+              <td className="py-2 pr-3 text-[#888]">{h.produto ?? "—"}</td>
+              <td className="py-2 pr-3 text-[#888]">
+                {h.dist.dataEnvio ? format(new Date(h.dist.dataEnvio), "dd/MM/yy", { locale: ptBR }) : "—"}
+              </td>
+              <td className={`py-2 font-medium ${STATUS_COLORS_HIST[h.dist.statusRetorno ?? "Aguardando"] ?? "text-[#888]"}` }>
+                {h.dist.statusRetorno ?? "Aguardando"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Condições por Produto ────────────────────────────────────────────────────
 
 function CondicoesProduto({ ifId, isAdmin }: { ifId: number; isAdmin: boolean }) {
   const { data: condicoes, refetch } = trpc.ifCadastros.listarCondicoes.useQuery({ ifId });
@@ -226,11 +333,26 @@ function IFCard({ if_: ifItem, isAdmin, onEdit, onDelete }: { if_: IFCadastro; i
           className="flex items-center gap-1 text-xs text-[#C9A84C] hover:text-[#B8973B] transition-colors"
         >
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          Condições por Produto
+          {expanded ? "Recolher" : "Ver detalhes"}
         </button>
         {expanded && (
           <div className="mt-3">
-            <CondicoesProduto ifId={ifItem.id} isAdmin={isAdmin} />
+            <Tabs defaultValue="condicoes">
+              <TabsList className="bg-[#1a1a1a] border border-[#C9A84C]/20 mb-3">
+                <TabsTrigger value="condicoes" className="text-xs data-[state=active]:bg-[#C9A84C]/20 data-[state=active]:text-[#C9A84C]">Condições</TabsTrigger>
+                <TabsTrigger value="metricas" className="text-xs data-[state=active]:bg-[#C9A84C]/20 data-[state=active]:text-[#C9A84C]">Métricas</TabsTrigger>
+                <TabsTrigger value="historico" className="text-xs data-[state=active]:bg-[#C9A84C]/20 data-[state=active]:text-[#C9A84C]">Histórico</TabsTrigger>
+              </TabsList>
+              <TabsContent value="condicoes">
+                <CondicoesProduto ifId={ifItem.id} isAdmin={isAdmin} />
+              </TabsContent>
+              <TabsContent value="metricas">
+                <MetricasIF ifId={ifItem.id} />
+              </TabsContent>
+              <TabsContent value="historico">
+                <HistoricoDistribuicoes ifId={ifItem.id} />
+              </TabsContent>
+            </Tabs>
           </div>
         )}
       </CardContent>

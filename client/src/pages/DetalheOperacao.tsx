@@ -347,6 +347,7 @@ function TabDados({ operacao, isAdmin, onRefetch, userId }: { operacao: any; isA
     onSuccess: () => { onRefetch(); toast.success("Status atualizado!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
+  const { data: equipeInterna } = trpc.usuarios.listarAdminOperacional.useQuery(undefined, { enabled: isAdmin });
 
   const STATUS_OPTIONS = [
     "Pré-cadastro","Aguardando documentos","Documentação parcial","Documentação completa",
@@ -420,6 +421,23 @@ function TabDados({ operacao, isAdmin, onRefetch, userId }: { operacao: any; isA
         <div className="card-premium p-5 rounded-lg">
           <h3 className="text-sm font-semibold text-foreground mb-3 border-b border-border pb-2">Observações Estratégicas</h3>
           <p className="text-sm text-foreground whitespace-pre-wrap">{operacao.observacoesEstrategicas}</p>
+        </div>
+      )}
+
+      {/* Responsável Operacional */}
+      {isAdmin && (
+        <div className="card-premium p-4 rounded-lg">
+          <h3 className="text-sm font-semibold text-foreground mb-3">Responsável Operacional</h3>
+          <select
+            value={operacao.responsavelOperacionalId ?? ""}
+            onChange={(e) => atualizarMutation.mutate({ id: operacao.id, responsavelOperacionalId: e.target.value ? Number(e.target.value) : null })}
+            className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50"
+          >
+            <option value="">Sem responsável definido</option>
+            {(equipeInterna ?? []).map((u) => (
+              <option key={u.id} value={u.id}>{u.name} ({u.perfil})</option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -614,8 +632,9 @@ function TabAnaliseIA({ operacaoId, operacao, userId }: { operacaoId: number; op
 
 function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: boolean; userId: number }) {
   const { data: ifs, isLoading, refetch } = trpc.ifs.listar.useQuery({ operacaoId });
+  const { data: ifsAtivas } = trpc.ifCadastros.listarAtivas.useQuery(undefined, { enabled: isAdmin });
   const criarMutation = trpc.ifs.criar.useMutation({
-    onSuccess: () => { refetch(); setShowForm(false); toast.success("IF adicionada!"); },
+    onSuccess: () => { refetch(); setShowForm(false); setNovaIF({ ifCadastroId: 0, dataEnvio: "", prazoRetornoEstimado: "", proximaAcao: "" }); toast.success("IF adicionada e distribuição registrada!"); },
     onError: (e) => toast.error("Erro: " + e.message),
   });
   const atualizarMutation = trpc.ifs.atualizar.useMutation({
@@ -624,7 +643,7 @@ function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: 
   });
 
   const [showForm, setShowForm] = useState(false);
-  const [novaIF, setNovaIF] = useState({ nomeInstituicao: "", dataEnvio: "", prazoRetornoEstimado: "", proximaAcao: "" });
+  const [novaIF, setNovaIF] = useState({ ifCadastroId: 0, dataEnvio: "", prazoRetornoEstimado: "", proximaAcao: "" });
 
   const STATUS_IF = ["Aguardando", "Em análise", "Aprovado", "Reprovado", "Stand-by"] as const;
 
@@ -637,23 +656,30 @@ function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: 
             className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm hover:bg-primary/20 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Adicionar IF
+            Enviar para IF
           </button>
         </div>
       )}
 
       {showForm && (
         <div className="card-premium p-4 rounded-lg space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">Nova Instituição Financeira</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Enviar para Instituição Financeira</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Selecione uma IF parceira cadastrada. A distribuição será registrada automaticamente para rastreabilidade.</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Nome da IF *</label>
-              <input
+            <div className="sm:col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">Instituição Financeira *</label>
+              <select
                 className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50"
-                value={novaIF.nomeInstituicao}
-                onChange={(e) => setNovaIF((p) => ({ ...p, nomeInstituicao: e.target.value }))}
-                placeholder="Ex: Banco do Brasil, Itaú..."
-              />
+                value={novaIF.ifCadastroId || ""}
+                onChange={(e) => setNovaIF((p) => ({ ...p, ifCadastroId: Number(e.target.value) }))}
+              >
+                <option value="">Selecione uma IF parceira...</option>
+                {(ifsAtivas ?? []).map((if_) => (
+                  <option key={if_.id} value={if_.id}>{if_.nome}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Data de Envio</label>
@@ -663,7 +689,7 @@ function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: 
               <label className="text-xs text-muted-foreground mb-1 block">Prazo de Retorno Estimado</label>
               <input type="date" className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50" value={novaIF.prazoRetornoEstimado} onChange={(e) => setNovaIF((p) => ({ ...p, prazoRetornoEstimado: e.target.value }))} />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="text-xs text-muted-foreground mb-1 block">Próxima Ação</label>
               <input className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50" value={novaIF.proximaAcao} onChange={(e) => setNovaIF((p) => ({ ...p, proximaAcao: e.target.value }))} placeholder="Próximo passo..." />
             </div>
@@ -671,11 +697,11 @@ function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: 
           <div className="flex gap-2 justify-end">
             <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-accent transition-colors">Cancelar</button>
             <button
-              onClick={() => criarMutation.mutate({ operacaoId, ...novaIF })}
-              disabled={!novaIF.nomeInstituicao || criarMutation.isPending}
+              onClick={() => criarMutation.mutate({ operacaoId, ifCadastroId: novaIF.ifCadastroId, dataEnvio: novaIF.dataEnvio || undefined, prazoRetornoEstimado: novaIF.prazoRetornoEstimado || undefined, proximaAcao: novaIF.proximaAcao || undefined })}
+              disabled={!novaIF.ifCadastroId || criarMutation.isPending}
               className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {criarMutation.isPending ? "Salvando..." : "Salvar"}
+              {criarMutation.isPending ? "Salvando..." : "Salvar e Registrar Distribuição"}
             </button>
           </div>
         </div>

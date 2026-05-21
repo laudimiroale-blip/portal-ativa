@@ -280,6 +280,7 @@ export type InsertTermoScr = typeof termosScr.$inferInsert;
 export const instituicoesFinanceiras = mysqlTable("instituicoes_financeiras", {
   id: int("id").autoincrement().primaryKey(),
   operacaoId: int("operacaoId").notNull(),
+  ifCadastroId: int("ifCadastroId"),
   nomeInstituicao: varchar("nomeInstituicao", { length: 255 }).notNull(),
   dataEnvio: timestamp("dataEnvio"),
   responsavelEnvio: int("responsavelEnvio"),

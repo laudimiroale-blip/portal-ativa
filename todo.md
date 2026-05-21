@@ -58,7 +58,7 @@
 - [ ] Upload de documentos pelo cliente via link
 - [ ] Consentimento LGPD digital
 - [ ] Relatórios e exportação PDF
-- [ ] Gestão de usuários (tela admin)
+- [x] Gestão de usuários (tela admin) — implementado no Módulo 07
 
 ## V1 Definitiva — Evoluções (Pasted_content_08)
 
@@ -108,3 +108,34 @@
 - [x] Registrar distribuição com data/hora e atualizar status da operação para "Em distribuição"
 - [x] Pré-cadastrar as 24 IFs parceiras com status "Ativa"
 - [x] Menu lateral: item "Instituições Financeiras" visível para Admin e Operacional (oculto para Consultor)
+
+## Ajustes Pós-Diagnóstico — Prioridade Alta e Média (Observações Estratégicas v2)
+
+### Bloco 1 — Integração Aba IFs com Cadastro
+- [x] Substituir campo de texto livre por select das IFs ativas do cadastro na aba IFs da operação
+- [x] Exibir nome do responsável pelo envio (usuário logado) na aba de IFs
+- [x] Adicionar procedure ifCadastros.listarAtivas (retorna id + nome das IFs com status Ativa)
+- [x] Adicionar procedure ifCadastros.metricasPorIF (total enviado, aprovado, reprovado, SLA médio por IF)
+- [x] Adicionar procedure ifCadastros.historicoDistribuicoes (operações distribuídas por IF com status)
+
+### Bloco 2 — Painel de Notificações Interno
+- [x] Router tRPC: notificacoes.listar, notificacoes.marcarLida, notificacoes.marcarTodasLidas
+- [x] Componente NotificacoesSino no header do AtivaDashboardLayout (badge com contagem de não lidas)
+- [x] Dropdown de notificações com lista e marcar como lida
+- [x] Disparar notificação interna ao criar nova operação (Admin)
+- [x] Disparar notificação interna quando status muda para Documentação Completa
+- [x] Disparar notificação interna quando status muda para Pronta para Análise
+- [x] Disparar notificação interna quando status muda para Pronta para Distribuição
+
+### Bloco 3 — Responsável Operacional
+- [x] Campo responsavelOperacionalId no formulário de criação (Etapa 2) — select de usuários admin/operacional
+- [x] Campo responsável operacional editável na aba Dados do detalhe da operação
+- [x] Filtro por responsável operacional no router operacoes.listar
+- [ ] Exibir coluna de responsável operacional na lista de operações (pendente — próxima sessão)
+- [ ] Exibir responsável nos cards da fila operacional (pendente — próxima sessão)
+
+### Bloco 4 — Histórico/Métricas por IF e Fila Granular
+- [x] Aba "Histórico de Operações" na tela /ifs: código ATV, cliente, produto, data envio, status retorno
+- [x] Métricas por IF na tela /ifs: total enviado, aprovadas, reprovadas, SLA médio
+- [ ] Granularidade da fila operacional: adicionar categorias "Docs ilegíveis" e "Aguardando SCR" (pendente)
+- [ ] SLA avançado: 4 alertas distintos (pendente)

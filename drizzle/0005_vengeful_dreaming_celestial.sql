@@ -1,0 +1,1 @@
+ALTER TABLE `instituicoes_financeiras` ADD `ifCadastroId` int;

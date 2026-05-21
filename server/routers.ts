@@ -32,6 +32,11 @@ import {
   deleteCondicaoIF,
   marcarNotificacaoLida,
   marcarTodasNotificacoesLidas,
+  getIFsAtivas,
+  getMetricasPorIF,
+  getHistoricoDistribuicoesByIF,
+  getAdmins,
+  getUsuariosAdminOperacional,
   getDocumentosComplementares,
   getDocumentosByOperacao,
   getGarantiasByOperacao,
@@ -95,6 +100,9 @@ export const appRouter = router({
     listarAssessores: protectedProcedure.query(async () => {
       return getAllAssessores();
     }),
+    listarAdminOperacional: protectedProcedure.query(async () => {
+      return getUsuariosAdminOperacional();
+    }),
     setPerfil: adminProcedure
       .input(z.object({ userId: z.number(), perfil: z.enum(["admin", "operacional", "assessor"]) }))
       .mutation(async ({ input }) => {
@@ -125,6 +133,7 @@ export const appRouter = router({
           prioridade: z.string().optional(),
           busca: z.string().optional(),
           apenasMinhas: z.boolean().optional(),
+          responsavelOperacionalId: z.number().optional(),
         }).optional()
       )
       .query(async ({ ctx, input }) => {
@@ -135,6 +144,7 @@ export const appRouter = router({
           produto: input?.produto,
           prioridade: input?.prioridade,
           busca: input?.busca,
+          responsavelOperacionalId: input?.responsavelOperacionalId,
         };
         if (!isAdmin || input?.apenasMinhas) {
           filters.assessorId = user.id;
@@ -176,6 +186,7 @@ export const appRouter = router({
           prioridade: z.enum(["Normal", "Alta"]).default("Normal"),
           statusRascunho: z.boolean().default(false),
           etapaAtual: z.number().optional().default(1),
+          responsavelOperacionalId: z.number().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -205,10 +216,22 @@ export const appRouter = router({
           valorGarantia: input.valorGarantia,
           tipoGarantiaDescricao: input.tipoGarantiaDescricao,
           etapaAtual: input.etapaAtual ?? 1,
+          responsavelOperacionalId: input.responsavelOperacionalId,
         });
 
         await inicializarChecklist(codigo, input.produto);
         await addLog({ evento: "operacao_criada", detalhe: { codigo }, usuarioId: user.id });
+        // Notificar admins sobre nova operação
+        const admins = await getAdmins();
+        for (const admin of admins) {
+          if (admin.id !== user.id) {
+            await createNotificacao({
+              usuarioId: admin.id,
+              tipo: "nova_operacao",
+              mensagem: `Nova operação criada: ${codigo} — ${input.nomeCliente} (${input.produto ?? "Home Equity"})`,
+            });
+          }
+        }
         return { codigoOperacao: codigo };
       }),
 
@@ -238,6 +261,7 @@ export const appRouter = router({
           defesaComercial: z.string().optional(),
           defesaAprovada: z.boolean().optional(),
           perfilExtraidoJson: z.any().optional(),
+          responsavelOperacionalId: z.number().nullable().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
@@ -262,6 +286,29 @@ export const appRouter = router({
 
         await updateOperacao(id, updateData);
         await addLog({ evento: "operacao_atualizada", detalhe: { id }, usuarioId: user.id, operacaoId: id });
+        // Notificar admins em status críticos
+        if (statusMacro) {
+          const admins = await getAdmins();
+          let tipoNotif: string | null = null;
+          let msgNotif: string | null = null;
+          if (statusMacro === "Documentação Completa") {
+            tipoNotif = "documentacao_completa";
+            msgNotif = `Documentação completa: ${op.codigoOperacao} — ${op.nomeCliente}`;
+          } else if (statusMacro === "Pronta para Análise") {
+            tipoNotif = "pronta_analise";
+            msgNotif = `Operação pronta para análise IA: ${op.codigoOperacao} — ${op.nomeCliente}`;
+          } else if (statusMacro === "Pronta para Distribuição") {
+            tipoNotif = "pronta_distribuicao";
+            msgNotif = `Operação pronta para distribuição: ${op.codigoOperacao} — ${op.nomeCliente}`;
+          }
+          if (tipoNotif && msgNotif) {
+            for (const admin of admins) {
+              if (admin.id !== user.id) {
+                await createNotificacao({ usuarioId: admin.id, tipo: tipoNotif, mensagem: msgNotif, operacaoId: id });
+              }
+            }
+          }
+        }
         return { success: true };
       }),
 
@@ -1157,31 +1204,39 @@ Resultado Documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.res
   }),
 
   // ─── Instituições Financeiras ───────────────────────────────────────────────
-  ifs: router({
+    ifs: router({
     listar: protectedProcedure
       .input(z.object({ operacaoId: z.number() }))
       .query(async ({ input }) => {
         return getIFsByOperacao(input.operacaoId);
       }),
-
     criar: adminProcedure
       .input(
         z.object({
           operacaoId: z.number(),
-          nomeInstituicao: z.string().min(2),
+          ifCadastroId: z.number(),
           dataEnvio: z.string().optional(),
           prazoRetornoEstimado: z.string().optional(),
           proximaAcao: z.string().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const ifCadastro = await getIFCadastradaById(input.ifCadastroId);
+        if (!ifCadastro) throw new TRPCError({ code: "NOT_FOUND", message: "IF não encontrada no cadastro." });
         await createIF({
           operacaoId: input.operacaoId,
-          nomeInstituicao: input.nomeInstituicao,
-          dataEnvio: input.dataEnvio ? new Date(input.dataEnvio) : undefined,
+          ifCadastroId: input.ifCadastroId,
+          nomeInstituicao: ifCadastro.nome,
+          dataEnvio: input.dataEnvio ? new Date(input.dataEnvio) : new Date(),
           prazoRetornoEstimado: input.prazoRetornoEstimado ? new Date(input.prazoRetornoEstimado) : undefined,
           responsavelEnvio: (ctx.user as any).id,
           proximaAcao: input.proximaAcao,
+        });
+        // Registrar também na tabela if_distribuicoes para rastreabilidade
+        await createDistribuicao({
+          operacaoId: input.operacaoId,
+          ifId: input.ifCadastroId,
+          distribuidoPor: (ctx.user as any).id,
         });
         return { success: true };
       }),
@@ -1366,6 +1421,19 @@ Resultado Documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.res
     listar: protectedProcedure.query(async () => {
       return getAllIFsCadastradas();
     }),
+    listarAtivas: protectedProcedure.query(async () => {
+      return getIFsAtivas();
+    }),
+    metricasPorIF: protectedProcedure
+      .input(z.object({ ifId: z.number() }))
+      .query(async ({ input }) => {
+        return getMetricasPorIF(input.ifId);
+      }),
+    historicoDistribuicoes: protectedProcedure
+      .input(z.object({ ifId: z.number() }))
+      .query(async ({ input }) => {
+        return getHistoricoDistribuicoesByIF(input.ifId);
+      }),
     obter: adminProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {

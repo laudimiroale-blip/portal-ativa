@@ -1,9 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import React from "react";
 import { getLoginUrl } from "@/const";
 import { cn } from "@/lib/utils";
 import {
   BarChart3,
+  Bell,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -17,8 +19,10 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface NavItem {
   label: string;
@@ -37,6 +41,113 @@ const navItems: NavItem[] = [
   { label: "Inst. Financeiras", href: "/ifs", icon: Building2, hideForAssessor: true },
   { label: "Usuários", href: "/usuarios", icon: Users, adminOnly: true },
 ];
+
+// ─── Sino de Notificações ─────────────────────────────────────────────────────
+
+function NotificacoesSino() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: notifs, refetch } = trpc.notificacoes.listar.useQuery(undefined, {
+    refetchInterval: 30000, // poll a cada 30s
+  });
+  const marcarLidaMutation = trpc.notificacoes.marcarLida.useMutation({ onSuccess: () => refetch() });
+  const marcarTodasMutation = trpc.notificacoes.marcarTodasLidas.useMutation({ onSuccess: () => refetch() });
+
+  const naoLidas = (notifs ?? []).filter((n) => !n.lida).length;
+
+  // Fechar ao clicar fora
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const tipoIcon: Record<string, string> = {
+    nova_operacao: "📋",
+    documentacao_completa: "✅",
+    pronta_analise: "🤖",
+    pronta_distribuicao: "🏦",
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+        aria-label="Notificações"
+      >
+        <Bell className="w-5 h-5" />
+        {naoLidas > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+            {naoLidas > 9 ? "9+" : naoLidas}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+          {/* Header do dropdown */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <span className="text-sm font-semibold text-foreground">Notificações</span>
+            {naoLidas > 0 && (
+              <button
+                onClick={() => marcarTodasMutation.mutate()}
+                className="text-xs text-primary hover:underline"
+              >
+                Marcar todas como lidas
+              </button>
+            )}
+          </div>
+
+          {/* Lista */}
+          <div className="max-h-80 overflow-y-auto divide-y divide-border/50">
+            {(notifs ?? []).length === 0 ? (
+              <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                <Bell className="w-6 h-6 mx-auto mb-2 opacity-30" />
+                Nenhuma notificação.
+              </div>
+            ) : (
+              (notifs ?? []).slice(0, 20).map((n) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "flex gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer",
+                    !n.lida && "bg-primary/5"
+                  )}
+                  onClick={() => {
+                    if (!n.lida) marcarLidaMutation.mutate({ id: n.id });
+                  }}
+                >
+                  <span className="text-base flex-shrink-0 mt-0.5">
+                    {tipoIcon[n.tipo] ?? "🔔"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-xs leading-snug", !n.lida ? "text-foreground font-medium" : "text-muted-foreground")}>
+                      {n.mensagem}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {formatDistanceToNow(new Date(n.createdAt), { locale: ptBR, addSuffix: true })}
+                    </p>
+                  </div>
+                  {!n.lida && (
+                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Layout Principal ─────────────────────────────────────────────────────────
 
 interface AtivaDashboardLayoutProps {
   children: React.ReactNode;
@@ -202,8 +313,13 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
             <Shield className="w-4 h-4 text-primary" />
             <span className="font-bold text-sm text-primary tracking-wider">ATIVA</span>
           </div>
-          <div className="w-9" />
+          <NotificacoesSino />
         </header>
+
+        {/* Desktop topbar com sino */}
+        <div className="hidden lg:flex items-center justify-end px-4 py-2 border-b border-border bg-card/30">
+          <NotificacoesSino />
+        </div>
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">
