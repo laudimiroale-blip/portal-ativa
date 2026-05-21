@@ -10,6 +10,8 @@ import Operacoes from "./pages/Operacoes";
 import NovaOperacao from "./pages/NovaOperacao";
 import DetalheOperacao from "./pages/DetalheOperacao";
 import FilaOperacional from "./pages/FilaOperacional";
+import GestaoIFs from "./pages/GestaoIFs";
+import GestaoUsuarios from "./pages/GestaoUsuarios";
 
 function Router() {
   return (
@@ -20,6 +22,8 @@ function Router() {
       <Route path="/operacoes/nova" component={NovaOperacao} />
       <Route path="/operacoes/:id" component={DetalheOperacao} />
       <Route path="/fila" component={FilaOperacional} />
+      <Route path="/ifs" component={GestaoIFs} />
+      <Route path="/usuarios" component={GestaoUsuarios} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

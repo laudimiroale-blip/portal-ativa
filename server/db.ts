@@ -7,8 +7,12 @@ import {
   documentosComplementares,
   garantias,
   historicoStatusOperacao,
+  ifCadastros,
+  ifCondicoes,
+  ifDistribuicoes,
   instituicoesFinanceiras,
   logsAuditoria,
+  notificacoes,
   operacoes,
   termosScr,
   users,
@@ -83,7 +87,7 @@ export async function getAllAssessores() {
   return db.select().from(users).where(and(eq(users.ativo, true), isNull(users.deletedAt)));
 }
 
-export async function updateUserPerfil(userId: number, perfil: "admin" | "assessor") {
+export async function updateUserPerfil(userId: number, perfil: "admin" | "operacional" | "assessor") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ perfil }).where(eq(users.id, userId));
@@ -444,4 +448,156 @@ export async function getOperacoesComSlaAlert() {
     )
     .orderBy(operacoes.ultimaMovimentacaoEm)
     .limit(20);
+}
+
+// ─── IFs Parceiras (Cadastro Global) ────────────────────────────────────────
+
+export async function getAllIFsCadastradas() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(ifCadastros)
+    .where(isNull(ifCadastros.deletedAt))
+    .orderBy(ifCadastros.nome);
+}
+
+export async function getIFCadastradaById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(ifCadastros).where(eq(ifCadastros.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function createIFCadastrada(data: typeof ifCadastros.$inferInsert) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(ifCadastros).values(data);
+}
+
+export async function updateIFCadastrada(id: number, data: Partial<typeof ifCadastros.$inferInsert>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(ifCadastros).set({ ...data, updatedAt: new Date() }).where(eq(ifCadastros.id, id));
+}
+
+export async function softDeleteIFCadastrada(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(ifCadastros).set({ deletedAt: new Date() }).where(eq(ifCadastros.id, id));
+}
+
+// ─── Condições por Produto por IF ────────────────────────────────────────────
+
+export async function getCondicoesByIF(ifId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(ifCondicoes).where(eq(ifCondicoes.ifId, ifId));
+}
+
+export async function upsertCondicaoIF(data: typeof ifCondicoes.$inferInsert) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  // Check if exists
+  const existing = await db
+    .select()
+    .from(ifCondicoes)
+    .where(and(eq(ifCondicoes.ifId, data.ifId), eq(ifCondicoes.produto, data.produto as any)))
+    .limit(1);
+  if (existing.length > 0) {
+    await db.update(ifCondicoes).set({ ...data, updatedAt: new Date() }).where(eq(ifCondicoes.id, existing[0].id));
+  } else {
+    await db.insert(ifCondicoes).values(data);
+  }
+}
+
+export async function deleteCondicaoIF(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(ifCondicoes).where(eq(ifCondicoes.id, id));
+}
+
+// ─── Distribuições de Operações para IFs ─────────────────────────────────────
+
+export async function getDistribuicoesByOperacao(operacaoId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      dist: ifDistribuicoes,
+      ifNome: ifCadastros.nome,
+      ifContato: ifCadastros.contatoNome,
+      ifEmail: ifCadastros.contatoEmail,
+    })
+    .from(ifDistribuicoes)
+    .leftJoin(ifCadastros, eq(ifDistribuicoes.ifId, ifCadastros.id))
+    .where(eq(ifDistribuicoes.operacaoId, operacaoId))
+    .orderBy(ifDistribuicoes.dataEnvio);
+}
+
+export async function createDistribuicao(data: typeof ifDistribuicoes.$inferInsert) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(ifDistribuicoes).values(data);
+}
+
+export async function updateDistribuicao(id: number, data: Partial<typeof ifDistribuicoes.$inferInsert>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(ifDistribuicoes).set({ ...data, updatedAt: new Date() }).where(eq(ifDistribuicoes.id, id));
+}
+
+// ─── Notificações ────────────────────────────────────────────────────────────
+
+export async function createNotificacao(data: typeof notificacoes.$inferInsert) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(notificacoes).values(data);
+}
+
+export async function getNotificacoesByUser(usuarioId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(notificacoes)
+    .where(eq(notificacoes.usuarioId, usuarioId))
+    .orderBy(notificacoes.createdAt)
+    .limit(50);
+}
+
+export async function marcarNotificacaoLida(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(notificacoes).set({ lida: true }).where(eq(notificacoes.id, id));
+}
+
+export async function marcarTodasNotificacoesLidas(usuarioId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(notificacoes).set({ lida: true }).where(eq(notificacoes.usuarioId, usuarioId));
+}
+
+// ─── Gestão de Usuários (Admin) ───────────────────────────────────────────────
+
+export async function getAllUsuarios() {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(users)
+    .where(isNull(users.deletedAt))
+    .orderBy(users.name);
+}
+
+export async function updateUsuario(id: number, data: Partial<typeof users.$inferInsert>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id));
+}
+
+export async function softDeleteUsuario(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(users).set({ deletedAt: new Date(), ativo: false }).where(eq(users.id, id));
 }

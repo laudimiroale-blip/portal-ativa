@@ -5,14 +5,19 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export default function Home() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (!loading && isAuthenticated) {
-      navigate("/dashboard");
+    if (!loading && isAuthenticated && user) {
+      const perfil = (user as any)?.perfil;
+      if (perfil === "assessor") {
+        navigate("/operacoes");
+      } else {
+        navigate("/dashboard");
+      }
     }
-  }, [isAuthenticated, loading, navigate]);
+  }, [isAuthenticated, loading, navigate, user]);
 
   if (loading) {
     return (

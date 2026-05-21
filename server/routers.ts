@@ -13,7 +13,25 @@ import {
   createTermoScr,
   createVersaoDocumento,
   getAllAssessores,
+  getAllIFsCadastradas,
+  getAllUsuarios,
   getAnalisesByOperacao,
+  getCondicoesByIF,
+  getDistribuicoesByOperacao,
+  getIFCadastradaById,
+  getNotificacoesByUser,
+  createIFCadastrada,
+  createDistribuicao,
+  createNotificacao,
+  updateIFCadastrada,
+  updateDistribuicao,
+  updateUsuario,
+  softDeleteIFCadastrada,
+  softDeleteUsuario,
+  upsertCondicaoIF,
+  deleteCondicaoIF,
+  marcarNotificacaoLida,
+  marcarTodasNotificacoesLidas,
   getDocumentosComplementares,
   getDocumentosByOperacao,
   getGarantiasByOperacao,
@@ -71,13 +89,28 @@ export const appRouter = router({
 
   // ─── Usuários ──────────────────────────────────────────────────────────────
   usuarios: router({
-    listar: protectedProcedure.query(async () => {
+    listar: adminProcedure.query(async () => {
+      return getAllUsuarios();
+    }),
+    listarAssessores: protectedProcedure.query(async () => {
       return getAllAssessores();
     }),
     setPerfil: adminProcedure
-      .input(z.object({ userId: z.number(), perfil: z.enum(["admin", "assessor"]) }))
+      .input(z.object({ userId: z.number(), perfil: z.enum(["admin", "operacional", "assessor"]) }))
       .mutation(async ({ input }) => {
         await updateUserPerfil(input.userId, input.perfil);
+        return { success: true };
+      }),
+    setAtivo: adminProcedure
+      .input(z.object({ userId: z.number(), ativo: z.boolean() }))
+      .mutation(async ({ input }) => {
+        await updateUsuario(input.userId, { ativo: input.ativo });
+        return { success: true };
+      }),
+    deletar: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        await softDeleteUsuario(input.userId);
         return { success: true };
       }),
   }),
@@ -1327,8 +1360,149 @@ Resultado Documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.res
         return { termo, operacao: op ? { nomeCliente: op.nomeCliente, produto: op.produto, estadoCivil: op.estadoCivil, codigoOperacao: op.codigoOperacao } : null };
       }),
   }),
-});
 
+  // ─── IFs Parceiras (Cadastro Global) ──────────────────────────────────────────────
+  ifCadastros: router({
+    listar: protectedProcedure.query(async () => {
+      return getAllIFsCadastradas();
+    }),
+    obter: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return getIFCadastradaById(input.id);
+      }),
+    criar: adminProcedure
+      .input(
+        z.object({
+          nome: z.string().min(2),
+          cnpj: z.string().min(14),
+          contatoNome: z.string().optional(),
+          contatoEmail: z.string().email().optional(),
+          contatoTel: z.string().optional(),
+          status: z.enum(["Ativa", "Inativa", "Em negociação"]).optional(),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await createIFCadastrada(input);
+        return { success: true };
+      }),
+    atualizar: adminProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          nome: z.string().min(2).optional(),
+          cnpj: z.string().optional(),
+          contatoNome: z.string().optional(),
+          contatoEmail: z.string().optional(),
+          contatoTel: z.string().optional(),
+          status: z.enum(["Ativa", "Inativa", "Em negociação"]).optional(),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await updateIFCadastrada(id, data);
+        return { success: true };
+      }),
+    deletar: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await softDeleteIFCadastrada(input.id);
+        return { success: true };
+      }),
+    // Condições por produto
+    listarCondicoes: protectedProcedure
+      .input(z.object({ ifId: z.number() }))
+      .query(async ({ input }) => {
+        return getCondicoesByIF(input.ifId);
+      }),
+    salvarCondicao: adminProcedure
+      .input(
+        z.object({
+          ifId: z.number(),
+          produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"]),
+          taxaMinima: z.string().optional(),
+          taxaMaxima: z.string().optional(),
+          ltvMaximo: z.string().optional(),
+          prazoMinimo: z.number().optional(),
+          prazoMaximo: z.number().optional(),
+          valorMinimo: z.string().optional(),
+          valorMaximo: z.string().optional(),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await upsertCondicaoIF(input as any);
+        return { success: true };
+      }),
+    deletarCondicao: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteCondicaoIF(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Distribuições de Operações para IFs ─────────────────────────────────────────
+  distribuicoes: router({
+    listar: protectedProcedure
+      .input(z.object({ operacaoId: z.number() }))
+      .query(async ({ input }) => {
+        return getDistribuicoesByOperacao(input.operacaoId);
+      }),
+    distribuir: adminProcedure
+      .input(
+        z.object({
+          operacaoId: z.number(),
+          ifIds: z.array(z.number()).min(1),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        for (const ifId of input.ifIds) {
+          await createDistribuicao({
+            operacaoId: input.operacaoId,
+            ifId,
+            observacoes: input.observacoes,
+            distribuidoPor: (ctx.user as any).id,
+          });
+        }
+        await updateOperacao(input.operacaoId, { statusMacro: "Em distribuição" });
+        return { success: true };
+      }),
+    atualizarStatus: adminProcedure
+      .input(
+        z.object({
+          id: z.number(),
+          statusRetorno: z.enum(["Aguardando", "Em análise", "Aprovada", "Reprovada", "Contraproposta"]),
+          observacoes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await updateDistribuicao(id, data);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Notificações ───────────────────────────────────────────────────────────────────
+  notificacoes: router({
+    listar: protectedProcedure.query(async ({ ctx }) => {
+      return getNotificacoesByUser((ctx.user as any).id);
+    }),
+    marcarLida: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await marcarNotificacaoLida(input.id);
+        return { success: true };
+      }),
+    marcarTodasLidas: protectedProcedure.mutation(async ({ ctx }) => {
+      await marcarTodasNotificacoesLidas((ctx.user as any).id);
+      return { success: true };
+    }),
+  }),
+});
 export type AppRouter = typeof appRouter;
 
 // ─── Helper: inicializar checklist por produto ────────────────────────────────

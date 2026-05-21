@@ -84,3 +84,27 @@
 - [x] Adicionar procedures `termoScr.criar`, `termoScr.obter`, `termoScr.assinar`
 - [x] Notificação para Admin quando operação fica pronta para validação humana
 - [x] Aviso de responsabilidade humana obrigatório na Etapa 5 (Revisão)
+
+## Módulo 07 — Login com 3 Níveis de Usuário (Pasted_content_16)
+- [x] Adicionar perfil "operacional" ao enum de perfis no schema (users)
+- [x] RBAC: Operacional vê operações de sua equipe, pode validar docs, não gerencia usuários/IFs
+- [x] Consultor: redirecionar para /operacoes após login (não para /dashboard)
+- [x] Consultor: ocultar menu Dashboard, IFs e Usuários no sidebar
+- [x] Operacional: ocultar menu Usuários no sidebar
+- [x] Tela de gestão de usuários /usuarios (Admin only): listar, criar, editar perfil e ativar/desativar
+
+## Módulo 04 — Portal de Instituições Financeiras (Pasted_content_16)
+- [x] Tabela if_condicoes no schema (taxa, LTV, prazo, valor por produto)
+- [x] Tabela if_distribuicoes no schema (operacao_id, if_id, data_envio, status_retorno)
+- [x] Tabela notificacoes no schema (usuario_id, operacao_id, tipo, mensagem, lida)
+- [x] Migrar banco com as 3 novas tabelas + índices de performance
+- [x] Tela /ifs: lista de IFs com nome, produtos, status, SLA médio, total operações enviadas
+- [x] Busca por nome na lista de IFs
+- [x] Botão "+ Nova IF" no topo direito
+- [x] Formulário de cadastro/edição de IF (nome, CNPJ, contato, status, observações)
+- [x] Aba "Condições por Produto" na IF: taxa min/max, LTV, prazo min/max, valor min/max, obs
+- [ ] Aba "Histórico de Operações" na IF: código ATV, cliente, produto, valor, data envio, status retorno (pendente — requer dados de distribuição)
+- [x] Modal "Distribuir para IFs" no detalhe da operação (status "Pronta para distribuição")
+- [x] Registrar distribuição com data/hora e atualizar status da operação para "Em distribuição"
+- [x] Pré-cadastrar as 24 IFs parceiras com status "Ativa"
+- [x] Menu lateral: item "Instituições Financeiras" visível para Admin e Operacional (oculto para Consultor)

@@ -19,7 +19,7 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  perfil: mysqlEnum("perfil", ["admin", "assessor"]).default("assessor").notNull(),
+  perfil: mysqlEnum("perfil", ["admin", "operacional", "assessor"]).default("assessor").notNull(),
   numeroWhatsapp: varchar("numeroWhatsapp", { length: 20 }),
   ativo: boolean("ativo").default(true).notNull(),
   deletedAt: timestamp("deletedAt"),
@@ -335,6 +335,89 @@ export const consentimentosLgpd = mysqlTable("consentimentos_lgpd", {
   identificadorSessao: varchar("identificadorSessao", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+// ─── Cadastro de IFs Parceiras ──────────────────────────────────────────────
+
+export const ifCadastros = mysqlTable("if_cadastros", {
+  id: int("id").autoincrement().primaryKey(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  cnpj: varchar("cnpj", { length: 18 }).notNull().unique(),
+  contatoNome: varchar("contatoNome", { length: 255 }),
+  contatoEmail: varchar("contatoEmail", { length: 320 }),
+  contatoTel: varchar("contatoTel", { length: 20 }),
+  status: mysqlEnum("status", ["Ativa", "Inativa", "Em negociação"]).default("Ativa").notNull(),
+  observacoes: text("observacoes"),
+  deletedAt: timestamp("deletedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type IfCadastro = typeof ifCadastros.$inferSelect;
+export type InsertIfCadastro = typeof ifCadastros.$inferInsert;
+
+// ─── Condições por Produto por IF ────────────────────────────────────────────
+
+export const ifCondicoes = mysqlTable("if_condicoes", {
+  id: int("id").autoincrement().primaryKey(),
+  ifId: int("ifId").notNull(),
+  produto: mysqlEnum("produto", [
+    "Home Equity",
+    "Auto Equity",
+    "Rural Equity",
+    "Imóvel em Construção",
+  ]).notNull(),
+  taxaMinima: decimal("taxaMinima", { precision: 5, scale: 2 }),
+  taxaMaxima: decimal("taxaMaxima", { precision: 5, scale: 2 }),
+  ltvMaximo: decimal("ltvMaximo", { precision: 5, scale: 2 }),
+  prazoMinimo: int("prazoMinimo"),
+  prazoMaximo: int("prazoMaximo"),
+  valorMinimo: decimal("valorMinimo", { precision: 15, scale: 2 }),
+  valorMaximo: decimal("valorMaximo", { precision: 15, scale: 2 }),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type IfCondicao = typeof ifCondicoes.$inferSelect;
+export type InsertIfCondicao = typeof ifCondicoes.$inferInsert;
+
+// ─── Distribuições de Operações para IFs ─────────────────────────────────────
+
+export const ifDistribuicoes = mysqlTable("if_distribuicoes", {
+  id: int("id").autoincrement().primaryKey(),
+  operacaoId: int("operacaoId").notNull(),
+  ifId: int("ifId").notNull(),
+  dataEnvio: timestamp("dataEnvio").defaultNow().notNull(),
+  statusRetorno: mysqlEnum("statusRetorno", [
+    "Aguardando",
+    "Em análise",
+    "Aprovada",
+    "Reprovada",
+    "Contraproposta",
+  ]).default("Aguardando").notNull(),
+  observacoes: text("observacoes"),
+  distribuidoPor: int("distribuidoPor"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type IfDistribuicao = typeof ifDistribuicoes.$inferSelect;
+export type InsertIfDistribuicao = typeof ifDistribuicoes.$inferInsert;
+
+// ─── Notificações ────────────────────────────────────────────────────────────
+
+export const notificacoes = mysqlTable("notificacoes", {
+  id: int("id").autoincrement().primaryKey(),
+  usuarioId: int("usuarioId").notNull(),
+  operacaoId: int("operacaoId"),
+  tipo: varchar("tipo", { length: 100 }).notNull(),
+  mensagem: text("mensagem").notNull(),
+  lida: boolean("lida").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Notificacao = typeof notificacoes.$inferSelect;
+export type InsertNotificacao = typeof notificacoes.$inferInsert;
 
 // ─── Logs de Auditoria ───────────────────────────────────────────────────────
 

@@ -14,6 +14,7 @@ import {
   Menu,
   Plus,
   Shield,
+  Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -24,16 +25,17 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
+  hideForAssessor?: boolean;
   badge?: string;
 }
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: Home },
+  { label: "Dashboard", href: "/dashboard", icon: Home, hideForAssessor: true },
   { label: "Operações", href: "/operacoes", icon: FolderOpen },
   { label: "Nova Operação", href: "/operacoes/nova", icon: Plus },
   { label: "Fila Operacional", href: "/fila", icon: BarChart3, adminOnly: true },
-  { label: "Instituições", href: "/instituicoes", icon: Building2, adminOnly: true },
-  { label: "Relatórios", href: "/relatorios", icon: FileText, adminOnly: true },
+  { label: "Inst. Financeiras", href: "/ifs", icon: Building2, hideForAssessor: true },
+  { label: "Usuários", href: "/usuarios", icon: Users, adminOnly: true },
 ];
 
 interface AtivaDashboardLayoutProps {
@@ -64,7 +66,12 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
     return null;
   }
 
-  const filteredNav = navItems.filter((item) => !item.adminOnly || isAdmin);
+  const isAssessor = (user as any)?.perfil === "assessor";
+  const filteredNav = navItems.filter((item) => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.hideForAssessor && isAssessor) return false;
+    return true;
+  });
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -132,7 +139,7 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-foreground truncate">{user?.name || "Usuário"}</p>
               <p className="text-[10px] text-muted-foreground capitalize">
-                {isAdmin ? "Administrador" : "Assessor"}
+                {isAdmin ? "Administrador" : (user as any)?.perfil === "operacional" ? "Operacional" : "Assessor"}
               </p>
             </div>
           </div>
