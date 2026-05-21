@@ -10,6 +10,8 @@ import { Link } from "wouter";
 
 const FILA_GRUPOS = [
   { label: "Aguardando Documentos", statuses: ["Aguardando documentos", "Documentação parcial"] },
+  { label: "Docs Ilegíveis", statuses: ["Documentos ilegíveis"] },
+  { label: "Aguardando SCR", statuses: ["Aguardando SCR"] },
   { label: "Documentação Completa", statuses: ["Documentação completa"] },
   { label: "Em Análise IA", statuses: ["Em análise IA"] },
   { label: "Em Validação Humana", statuses: ["Em validação humana"] },
@@ -144,6 +146,11 @@ export default function FilaOperacional() {
                             <Clock className="w-2.5 h-2.5" />
                             {formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR, addSuffix: true })}
                           </div>
+                          {(op as any).responsavelOperacionalNome && (
+                            <div className="mt-1 text-[10px] text-primary/70 truncate">
+                              • {(op as any).responsavelOperacionalNome}
+                            </div>
+                          )}
                           {slaIds.has(op.id) && (
                             <SlaAlertBadge label="SLA" className="mt-1.5" />
                           )}

@@ -131,11 +131,11 @@
 - [x] Campo responsavelOperacionalId no formulário de criação (Etapa 2) — select de usuários admin/operacional
 - [x] Campo responsável operacional editável na aba Dados do detalhe da operação
 - [x] Filtro por responsável operacional no router operacoes.listar
-- [ ] Exibir coluna de responsável operacional na lista de operações (pendente — próxima sessão)
-- [ ] Exibir responsável nos cards da fila operacional (pendente — próxima sessão)
+- [x] Exibir coluna de responsável operacional na lista de operações
+- [x] Exibir responsável nos cards da fila operacional
 
 ### Bloco 4 — Histórico/Métricas por IF e Fila Granular
 - [x] Aba "Histórico de Operações" na tela /ifs: código ATV, cliente, produto, data envio, status retorno
 - [x] Métricas por IF na tela /ifs: total enviado, aprovadas, reprovadas, SLA médio
-- [ ] Granularidade da fila operacional: adicionar categorias "Docs ilegíveis" e "Aguardando SCR" (pendente)
-- [ ] SLA avançado: 4 alertas distintos (pendente)
+- [x] Granularidade da fila operacional: adicionar categorias "Documentos ilegíveis" e "Aguardando SCR"
+- [x] SLA avançado: 4 alertas distintos (24h sem movimentação, docs 48h, prazo bancário vencido, 7 dias parada)

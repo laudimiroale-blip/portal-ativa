@@ -47,6 +47,7 @@ import {
   getOperacaoById,
   getOperacoes,
   getOperacoesComSlaAlert,
+  getOperacoesComSlaAlerts,
   getTermoScrByOperacao,
   getTermoScrByToken,
   getVersoesDocumento,
@@ -330,6 +331,9 @@ export const appRouter = router({
 
     slaAlerts: adminProcedure.query(async () => {
       return getOperacoesComSlaAlert();
+    }),
+    slaAlertsFull: adminProcedure.query(async () => {
+      return getOperacoesComSlaAlerts();
     }),
   }),
 

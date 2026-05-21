@@ -35,6 +35,7 @@ function DashboardAdmin() {
   const { user } = useAuth();
   const { data: metricas, isLoading: loadingMetricas } = trpc.operacoes.metricas.useQuery();
   const { data: slaAlerts } = trpc.operacoes.slaAlerts.useQuery();
+  const { data: slaFull } = trpc.operacoes.slaAlertsFull.useQuery();
   const { data: operacoes, isLoading: loadingOps } = trpc.operacoes.listar.useQuery({});
   const { data: metricasConsultores, isLoading: loadingConsultores } = trpc.operacoes.metricasPorConsultor.useQuery();
 
@@ -92,28 +93,100 @@ function DashboardAdmin() {
         />
       </div>
 
-      {/* Alertas SLA */}
-      {(slaAlerts?.length ?? 0) > 0 && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
+      {/* Alertas SLA Avançados */}
+      {slaFull && (slaFull.paradas7dias.length + slaFull.docs48h.length + slaFull.prazoBancarioVencido.length + slaFull.paradas24h.length) > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-400" />
-            <h2 className="text-sm font-semibold text-red-400">Alertas de SLA — Operações Paradas</h2>
+            <h2 className="text-sm font-semibold text-red-400">Alertas de SLA</h2>
+            <span className="text-xs bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">
+              {slaFull.paradas7dias.length + slaFull.docs48h.length + slaFull.prazoBancarioVencido.length + slaFull.paradas24h.length} alerta(s)
+            </span>
           </div>
-          <div className="space-y-2">
-            {slaAlerts?.slice(0, 5).map((op) => (
-              <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-3 bg-red-500/5 border border-red-500/20 rounded-md hover:border-red-500/40 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-red-400">{op.codigoOperacao}</span>
-                    <span className="text-sm text-foreground">{op.nomeCliente}</span>
-                    <StatusBadge status={op.statusMacro} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <SlaAlertBadge label={`Parado há ${formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR })}`} />
-                    <PrioridadeBadge prioridade={op.prioridade} />
-                  </div>
-              </Link>
-            ))}
-          </div>
+
+          {/* Paradas 7 dias */}
+          {slaFull.paradas7dias.length > 0 && (
+            <div className="bg-red-900/20 border border-red-700/40 rounded-lg p-3">
+              <p className="text-xs font-semibold text-red-400 mb-2 flex items-center gap-1.5">
+                <Clock className="w-3 h-3" /> Paradas há mais de 7 dias — {slaFull.paradas7dias.length} operação(oes)
+              </p>
+              <div className="space-y-1.5">
+                {slaFull.paradas7dias.map((op) => (
+                  <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2 bg-red-500/5 border border-red-500/20 rounded hover:border-red-500/40 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-red-400">{op.codigoOperacao}</span>
+                      <span className="text-xs text-foreground truncate max-w-[160px]">{op.nomeCliente}</span>
+                      <StatusBadge status={op.statusMacro} />
+                    </div>
+                    <SlaAlertBadge label={formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR })} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Prazo bancário vencido */}
+          {slaFull.prazoBancarioVencido.length > 0 && (
+            <div className="bg-orange-900/20 border border-orange-700/40 rounded-lg p-3">
+              <p className="text-xs font-semibold text-orange-400 mb-2 flex items-center gap-1.5">
+                <AlertTriangle className="w-3 h-3" /> Prazo bancário vencido — {slaFull.prazoBancarioVencido.length} operação(oes)
+              </p>
+              <div className="space-y-1.5">
+                {slaFull.prazoBancarioVencido.map((op: any) => (
+                  <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2 bg-orange-500/5 border border-orange-500/20 rounded hover:border-orange-500/40 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-orange-400">{op.codigoOperacao}</span>
+                      <span className="text-xs text-foreground truncate max-w-[160px]">{op.nomeCliente}</span>
+                      <StatusBadge status={op.statusMacro} />
+                    </div>
+                    <SlaAlertBadge label="Prazo vencido" className="border-orange-500/30 text-orange-400" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Docs pendentes 48h */}
+          {slaFull.docs48h.length > 0 && (
+            <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3">
+              <p className="text-xs font-semibold text-yellow-400 mb-2 flex items-center gap-1.5">
+                <FileText className="w-3 h-3" /> Docs pendentes há mais de 48h — {slaFull.docs48h.length} operação(oes)
+              </p>
+              <div className="space-y-1.5">
+                {slaFull.docs48h.map((op) => (
+                  <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2 bg-yellow-500/5 border border-yellow-500/20 rounded hover:border-yellow-500/40 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-yellow-400">{op.codigoOperacao}</span>
+                      <span className="text-xs text-foreground truncate max-w-[160px]">{op.nomeCliente}</span>
+                      <StatusBadge status={op.statusMacro} />
+                    </div>
+                    <SlaAlertBadge label={formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR })} className="border-yellow-500/30 text-yellow-400" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Paradas 24h (atenção) */}
+          {slaFull.paradas24h.length > 0 && (
+            <div className="bg-blue-900/20 border border-blue-700/40 rounded-lg p-3">
+              <p className="text-xs font-semibold text-blue-400 mb-2 flex items-center gap-1.5">
+                <Clock className="w-3 h-3" /> Sem movimentação há mais de 24h — {slaFull.paradas24h.length} operação(oes)
+              </p>
+              <div className="space-y-1.5">
+                {slaFull.paradas24h.map((op) => (
+                  <Link key={op.id} href={`/operacoes/${op.id}`} className="flex items-center justify-between p-2 bg-blue-500/5 border border-blue-500/20 rounded hover:border-blue-500/40 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-blue-400">{op.codigoOperacao}</span>
+                      <span className="text-xs text-foreground truncate max-w-[160px]">{op.nomeCliente}</span>
+                      <StatusBadge status={op.statusMacro} />
+                    </div>
+                    <SlaAlertBadge label={formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR })} className="border-blue-500/30 text-blue-400" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

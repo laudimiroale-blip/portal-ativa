@@ -6,6 +6,8 @@ const STATUS_CLASSES: Record<string, string> = {
   "Pré-cadastro": "bg-zinc-700/50 text-zinc-300 border-zinc-600/30",
   "Aguardando documentos": "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   "Documentação parcial": "bg-orange-500/20 text-orange-400 border-orange-500/30",
+  "Documentos ilegíveis": "bg-red-600/20 text-red-400 border-red-600/30",
+  "Aguardando SCR": "bg-purple-500/20 text-purple-400 border-purple-500/30",
   "Documentação completa": "bg-blue-500/20 text-blue-400 border-blue-500/30",
   "Em análise IA": "bg-violet-500/20 text-violet-400 border-violet-500/30",
   "Em validação humana": "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",

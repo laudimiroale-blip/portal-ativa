@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, like, or, sql, SQL } from "drizzle-orm";
+import { aliasedTable, and, desc, eq, getTableColumns, isNull, like, or, sql, SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -121,9 +121,7 @@ export async function getOperacoes(filters?: {
 }) {
   const db = await getDb();
   if (!db) return [];
-
   const conditions: SQL[] = [isNull(operacoes.deletedAt) as SQL];
-
   if (filters?.assessorId) conditions.push(eq(operacoes.assessorId, filters.assessorId));
   if (filters?.statusMacro) conditions.push(eq(operacoes.statusMacro, filters.statusMacro as any));
   if (filters?.produto) conditions.push(eq(operacoes.produto, filters.produto as any));
@@ -138,12 +136,17 @@ export async function getOperacoes(filters?: {
     );
     if (orClause) conditions.push(orClause as SQL);
   }
-
-  return db
-    .select()
+  const responsavelAlias = aliasedTable(users, "responsavel");
+  const rows = await db
+    .select({
+      ...getTableColumns(operacoes),
+      responsavelOperacionalNome: responsavelAlias.name,
+    })
     .from(operacoes)
+    .leftJoin(responsavelAlias, eq(operacoes.responsavelOperacionalId, responsavelAlias.id))
     .where(and(...conditions))
     .orderBy(desc(operacoes.ultimaMovimentacaoEm));
+  return rows;
 }
 
 export async function getOperacaoById(id: number) {
@@ -436,9 +439,7 @@ export async function getMetricasDashboard() {
 export async function getOperacoesComSlaAlert() {
   const db = await getDb();
   if (!db) return [];
-
   const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
   return db
     .select()
     .from(operacoes)
@@ -450,6 +451,85 @@ export async function getOperacoesComSlaAlert() {
     )
     .orderBy(operacoes.ultimaMovimentacaoEm)
     .limit(20);
+}
+
+export async function getOperacoesComSlaAlerts() {
+  const db = await getDb();
+  if (!db) return { paradas24h: [], docs48h: [], prazoBancarioVencido: [], paradas7dias: [] };
+
+  const agora = Date.now();
+  const limite24h = new Date(agora - 24 * 60 * 60 * 1000);
+  const limite48h = new Date(agora - 48 * 60 * 60 * 1000);
+  const limite7dias = new Date(agora - 7 * 24 * 60 * 60 * 1000);
+
+  const statusAtivos = [
+    "Pré-cadastro", "Aguardando documentos", "Documentação parcial",
+    "Documentos ilegíveis", "Aguardando SCR", "Documentação completa",
+    "Em análise IA", "Em validação humana", "Pronta para distribuição",
+    "Em distribuição", "Distribuída", "Em retorno bancário", "Aguardando cliente",
+  ];
+
+  const statusDocPendente = ["Aguardando documentos", "Documentação parcial", "Documentos ilegíveis"];
+  const statusDistribuicao = ["Em distribuição", "Distribuída", "Em retorno bancário"];
+
+  // 1. Operações ativas sem movimentação há mais de 24h
+  const paradas24h = await db
+    .select()
+    .from(operacoes)
+    .where(and(
+      isNull(operacoes.deletedAt),
+      sql`${operacoes.statusMacro} IN (${sql.join(statusAtivos.map((s) => sql`${s}`), sql`, `)})`,
+      sql`${operacoes.ultimaMovimentacaoEm} < ${limite24h}`,
+      sql`${operacoes.ultimaMovimentacaoEm} >= ${limite48h}`,
+    ))
+    .orderBy(operacoes.ultimaMovimentacaoEm)
+    .limit(15);
+
+  // 2. Operações com docs pendentes há mais de 48h
+  const docs48h = await db
+    .select()
+    .from(operacoes)
+    .where(and(
+      isNull(operacoes.deletedAt),
+      sql`${operacoes.statusMacro} IN (${sql.join(statusDocPendente.map((s) => sql`${s}`), sql`, `)})`,
+      sql`${operacoes.ultimaMovimentacaoEm} < ${limite48h}`,
+    ))
+    .orderBy(operacoes.ultimaMovimentacaoEm)
+    .limit(15);
+
+  // 3. Operações em distribuição com prazo de retorno vencido
+  const prazoBancarioVencido = await db
+    .select()
+    .from(operacoes)
+    .leftJoin(instituicoesFinanceiras, eq(instituicoesFinanceiras.operacaoId, operacoes.id))
+    .where(and(
+      isNull(operacoes.deletedAt),
+      sql`${operacoes.statusMacro} IN (${sql.join(statusDistribuicao.map((s) => sql`${s}`), sql`, `)})`,
+      sql`${instituicoesFinanceiras.prazoRetornoEstimado} IS NOT NULL`,
+      sql`${instituicoesFinanceiras.prazoRetornoEstimado} < NOW()`,
+      sql`${instituicoesFinanceiras.status} NOT IN ('Aprovado', 'Reprovado')`,
+    ))
+    .orderBy(operacoes.ultimaMovimentacaoEm)
+    .limit(15);
+
+  // 4. Operações paradas há mais de 7 dias (qualquer status ativo)
+  const paradas7dias = await db
+    .select()
+    .from(operacoes)
+    .where(and(
+      isNull(operacoes.deletedAt),
+      sql`${operacoes.statusMacro} IN (${sql.join(statusAtivos.map((s) => sql`${s}`), sql`, `)})`,
+      sql`${operacoes.ultimaMovimentacaoEm} < ${limite7dias}`,
+    ))
+    .orderBy(operacoes.ultimaMovimentacaoEm)
+    .limit(10);
+
+  return {
+    paradas24h,
+    docs48h,
+    prazoBancarioVencido: prazoBancarioVencido.map((r) => (r as any).operacoes ?? r),
+    paradas7dias,
+  };
 }
 
 // ─── IFs Parceiras (Cadastro Global) ────────────────────────────────────────

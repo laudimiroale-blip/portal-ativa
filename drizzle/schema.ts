@@ -70,6 +70,8 @@ export const operacoes = mysqlTable("operacoes", {
     "Pré-cadastro",
     "Aguardando documentos",
     "Documentação parcial",
+    "Documentos ilegíveis",
+    "Aguardando SCR",
     "Documentação completa",
     "Em análise IA",
     "Em validação humana",

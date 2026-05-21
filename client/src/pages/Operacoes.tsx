@@ -9,8 +9,8 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 
 const STATUS_OPTIONS = [
-  "Pré-cadastro", "Aguardando documentos", "Documentação parcial", "Documentação completa",
-  "Em análise IA", "Em validação humana", "Pronta para distribuição", "Em distribuição",
+  "Pré-cadastro", "Aguardando documentos", "Documentação parcial", "Documentos ilegíveis", "Aguardando SCR",
+  "Documentação completa", "Em análise IA", "Em validação humana", "Pronta para distribuição", "Em distribuição",
   "Distribuída", "Em retorno bancário", "Aguardando cliente", "Aprovada", "Reprovada", "Cancelada", "Stand-by",
 ];
 
@@ -191,7 +191,8 @@ export default function Operacoes() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Valor</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Prioridade</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden xl:table-cell">Última mov.</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden xl:table-cell">Responsável</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden 2xl:table-cell">Última mov.</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
@@ -224,6 +225,13 @@ export default function Operacoes() {
                         <PrioridadeBadge prioridade={op.prioridade} />
                       </td>
                       <td className="px-4 py-3 hidden xl:table-cell">
+                        {(op as any).responsavelOperacionalNome ? (
+                          <span className="text-xs text-foreground">{(op as any).responsavelOperacionalNome}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 hidden 2xl:table-cell">
                         <span className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR, addSuffix: true })}
                         </span>

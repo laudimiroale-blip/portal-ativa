@@ -350,8 +350,8 @@ function TabDados({ operacao, isAdmin, onRefetch, userId }: { operacao: any; isA
   const { data: equipeInterna } = trpc.usuarios.listarAdminOperacional.useQuery(undefined, { enabled: isAdmin });
 
   const STATUS_OPTIONS = [
-    "Pré-cadastro","Aguardando documentos","Documentação parcial","Documentação completa",
-    "Em análise IA","Em validação humana","Pronta para distribuição","Em distribuição",
+    "Pré-cadastro","Aguardando documentos","Documentação parcial","Documentos ilegíveis","Aguardando SCR",
+    "Documentação completa","Em análise IA","Em validação humana","Pronta para distribuição","Em distribuição",
     "Distribuída","Em retorno bancário","Aguardando cliente","Aprovada","Reprovada","Cancelada","Stand-by",
   ];
 
