@@ -14,7 +14,6 @@ import {
   Home,
   LogOut,
   Menu,
-  Plus,
   Shield,
   Users,
   X,
@@ -36,7 +35,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Home, hideForAssessor: true },
   { label: "Operações", href: "/operacoes", icon: FolderOpen },
-  { label: "Nova Operação", href: "/operacoes/nova", icon: Plus },
   { label: "Fila Operacional", href: "/fila", icon: BarChart3, adminOnly: true },
   { label: "Inst. Financeiras", href: "/ifs", icon: Building2, hideForAssessor: true },
   { label: "Usuários", href: "/usuarios", icon: Users, adminOnly: true },
@@ -197,7 +195,9 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
         {!collapsed && (
           <div>
             <p className="font-bold text-sm text-primary tracking-wider">ATIVA</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Portal Operacional</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+              {isAdmin ? "Administrador" : (user as any)?.perfil === "operacional" ? "Operacional" : "Assessor"}
+            </p>
           </div>
         )}
       </div>
