@@ -524,11 +524,29 @@ function Etapa3Documentos({
 
   const [filaArquivos, setFilaArquivos] = useState<Record<number, ArquivoLocal[]>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  type DocStatus = {
+    id: number;
+    nome: string;
+    semaforo: "verde" | "amarelo" | "vermelho";
+    tipo_identificado: string;
+    legivel: boolean;
+    pertence_ao_cliente: boolean | null;
+    observacao: string;
+    dados_extraidos: {
+      titular_identificado: string | null;
+      data_emissao: string | null;
+      validade: string | null;
+      numero_documento: string | null;
+    };
+  };
   const [resultadoConferencia, setResultadoConferencia] = useState<{
     aprovado: boolean;
-    pendencias: string[];
-    observacoes: string;
-    documentos_analisados: number;
+    situacaoGeral: string;
+    documentosPorStatus: DocStatus[];
+    dadosExtraidos: Record<string, string | null> | null;
+    pendenciasCriticas: string[];
+    pendenciasSecundarias: string[];
+    documentosAusentes: string[];
     resumo: string;
     checklist_total: number;
     checklist_concluidos: number;
@@ -621,12 +639,13 @@ function Etapa3Documentos({
     setConferindo(true);
     try {
       const resultado = await conferirMutation.mutateAsync({ operacaoId });
-      setResultadoConferencia(resultado);
+      setResultadoConferencia(resultado as any);
       if (resultado.aprovado) {
-        toast.success("Documentação completa! Você pode prosseguir.");
+        toast.success("Documentação validada pela IA! Você pode prosseguir.");
         await atualizarMutation.mutateAsync({ id: operacaoId, etapaAtual: 4 });
       } else {
-        toast.warning(`Documentação incompleta: ${resultado.pendencias.length} pendência(s) encontrada(s).`);
+        const totalPend = ((resultado as any).pendenciasCriticas?.length ?? 0) + ((resultado as any).pendenciasSecundarias?.length ?? 0);
+        toast.warning(`Análise concluída: ${totalPend} pendência(s) encontrada(s). Verifique os documentos abaixo.`);
       }
     } catch (err: any) {
       toast.error("Erro ao conferir documentação: " + err.message);
@@ -676,30 +695,108 @@ function Etapa3Documentos({
       </div>
 
       {resultadoConferencia && (
-        <div className={cn(
-          "rounded-lg border p-4 space-y-3",
-          resultadoConferencia.aprovado
-            ? "border-emerald-500/30 bg-emerald-500/5"
-            : "border-yellow-500/30 bg-yellow-500/5"
-        )}>
-          <div className="flex items-center gap-2">
-            {resultadoConferencia.aprovado
-              ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-              : <AlertTriangle className="w-5 h-5 text-yellow-400" />}
-            <p className={cn("font-medium text-sm", resultadoConferencia.aprovado ? "text-emerald-300" : "text-yellow-300")}>
-              {resultadoConferencia.aprovado ? "Documentação completa — pronto para prosseguir" : "Documentação incompleta"}
-            </p>
+        <div className="space-y-3">
+          {/* Status geral */}
+          <div className={cn(
+            "rounded-lg border p-4 space-y-3",
+            resultadoConferencia.aprovado
+              ? "border-emerald-500/30 bg-emerald-500/5"
+              : resultadoConferencia.pendenciasCriticas.length > 0
+                ? "border-red-500/30 bg-red-500/5"
+                : "border-yellow-500/30 bg-yellow-500/5"
+          )}>
+            <div className="flex items-center gap-2 flex-wrap">
+              {resultadoConferencia.aprovado
+                ? <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                : resultadoConferencia.pendenciasCriticas.length > 0
+                  ? <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  : <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />}
+              <p className={cn(
+                "font-medium text-sm",
+                resultadoConferencia.aprovado ? "text-emerald-300"
+                  : resultadoConferencia.pendenciasCriticas.length > 0 ? "text-red-300"
+                  : "text-yellow-300"
+              )}>
+                {resultadoConferencia.situacaoGeral}
+              </p>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {resultadoConferencia.checklist_concluidos}/{resultadoConferencia.checklist_total} enviados
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground">{resultadoConferencia.resumo}</p>
+            {resultadoConferencia.pendenciasCriticas.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-red-400 uppercase tracking-wider">Pendências críticas (bloqueiam avanço):</p>
+                {resultadoConferencia.pendenciasCriticas.map((p, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-red-300/80">
+                    <XCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-red-400" />
+                    {p}
+                  </div>
+                ))}
+              </div>
+            )}
+            {resultadoConferencia.pendenciasSecundarias.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-yellow-400 uppercase tracking-wider">Pendências secundárias (não bloqueiam):</p>
+                {resultadoConferencia.pendenciasSecundarias.map((p, i) => (
+                  <div key={i} className="flex items-start gap-2 text-sm text-yellow-300/80">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-yellow-400" />
+                    {p}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <p className="text-sm text-muted-foreground">{resultadoConferencia.resumo}</p>
-          {resultadoConferencia.pendencias.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-yellow-400 uppercase tracking-wider">Pendências:</p>
-              {resultadoConferencia.pendencias.map((p, i) => (
-                <div key={i} className="flex items-start gap-2 text-sm text-yellow-300/80">
-                  <XCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-yellow-400" />
-                  {p}
+
+          {/* Status por documento */}
+          {resultadoConferencia.documentosPorStatus.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Análise por documento:</p>
+              {resultadoConferencia.documentosPorStatus.map((docR) => (
+                <div key={docR.id} className={cn(
+                  "flex items-start gap-3 px-3 py-2.5 rounded-md border text-sm",
+                  docR.semaforo === "verde" ? "border-emerald-500/20 bg-emerald-500/5"
+                    : docR.semaforo === "amarelo" ? "border-yellow-500/20 bg-yellow-500/5"
+                    : "border-red-500/20 bg-red-500/5"
+                )}>
+                  <span className="flex-shrink-0 mt-0.5">
+                    {docR.semaforo === "verde" ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      : docR.semaforo === "amarelo" ? <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                      : <XCircle className="w-4 h-4 text-red-400" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn(
+                      "font-medium",
+                      docR.semaforo === "verde" ? "text-emerald-300"
+                        : docR.semaforo === "amarelo" ? "text-yellow-300"
+                        : "text-red-300"
+                    )}>{docR.nome}</p>
+                    {docR.tipo_identificado && docR.tipo_identificado !== docR.nome && (
+                      <p className="text-xs text-muted-foreground">Identificado como: {docR.tipo_identificado}</p>
+                    )}
+                    {docR.observacao && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{docR.observacao}</p>
+                    )}
+                  </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Dados extraídos automaticamente */}
+          {resultadoConferencia.dadosExtraidos && Object.values(resultadoConferencia.dadosExtraidos).some(v => v !== null && v !== "") && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
+              <p className="text-xs font-medium text-primary uppercase tracking-wider">Dados extraídos automaticamente pela IA:</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {Object.entries(resultadoConferencia.dadosExtraidos)
+                  .filter(([, v]) => v !== null && v !== "")
+                  .map(([k, v]) => (
+                    <div key={k} className="text-xs">
+                      <span className="text-muted-foreground capitalize">{k.replace(/_/g, " ")}: </span>
+                      <span className="text-foreground">{v}</span>
+                    </div>
+                  ))}
+              </div>
             </div>
           )}
         </div>

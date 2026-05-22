@@ -150,3 +150,21 @@
 - [ ] Testar criar operação no desktop e mobile
 - [ ] Testar salvar rascunho
 - [ ] Testar criar e continuar
+
+## Pré-Análise Documental Inteligente — Etapa 3 (Pasted_content_18)
+
+### Backend
+- [ ] Router ia.preAnalisarDocumentos: receber lista de arquivos da operação, chamar LLM com URLs dos docs, retornar análise por documento
+- [ ] IA retorna por documento: tipoIdentificado, pertenceAoCampo, legivel, integro, pertenceAoCliente, observacoes, statusValidacao (ok/pendencia/critico)
+- [ ] IA retorna extração automática: nome, CPF, endereço, estadoCivil, matriculaImovel, enderecoImovel, metragem, cidade, UF, titularidade, onus, renda, saldoMedio, faturamento
+- [ ] IA retorna statusGeral: "Documentação completa" | "Parcialmente completa" | "Pendências relevantes" | "Necessita regularização" | "Pronta para análise sênior"
+- [ ] Salvar resultado da pré-análise no campo perfilExtratidoJson da operação
+
+### Frontend — Etapa 3
+- [ ] Multiupload em campos: extratos bancários, fotos do imóvel, IRPF, holerites, comprovantes, fotos veículo, documentos complementares
+- [ ] Botão "Conferir Documentação" dispara análise real da IA (não apenas verificação de upload)
+- [ ] Loading visual com progresso enquanto IA processa (não travar interface)
+- [ ] Exibir por documento: ✔ Validado / ⚠ Pendência / ✖ Incorreto com tipo identificado e observações da IA
+- [ ] Exibir dados extraídos automaticamente pela IA após análise
+- [ ] Botão "Prosseguir" liberado quando documentos mínimos válidos (mesmo com pendências secundárias)
+- [ ] Bloquear avanço APENAS quando houver documento ilegível, errado, ausente obrigatório ou divergência grave

@@ -999,29 +999,153 @@ Gere a revisão completa seguindo a estrutura de 10 seções obrigatórias.`;
         if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
         const docs = await getDocumentosByOperacao(input.operacaoId);
         const docsEnviados = docs.filter((d: any) => d.arquivoUrl);
-        // Checklist = todos os documentos; pendentes = os que não têm arquivo
-        const pendentes = docs.filter((d: any) => !d.arquivoUrl).map((d: any) => d.nomeDocumento);
+        const docsPendentes = docs.filter((d: any) => !d.arquivoUrl);
         const checklistTotal = docs.length;
         const checklistConcluidos = docsEnviados.length;
-        // Montar conteúdo multimodal com os arquivos enviados
-        const contentParts: any[] = [
-          { type: "text", text: `Você é um Analista de Crédito Sênior especializado em operações de crédito com garantia. Analise os documentos da operação ${op.codigoOperacao} (Produto: ${op.produto}, Cliente: ${op.nomeCliente}).\n\nCHECKLIST:\n${docs.map((d: any) => `- ${d.nomeDocumento}: ${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}`).join("\n")}\n\nDOCUMENTOS ENVIADOS: ${docsEnviados.length} de ${docs.length}\n\nRetorne JSON com:\n{ aprovado: boolean, pendencias: string[], observacoes: string, documentos_analisados: number, resumo: string }` }
-        ];
-        for (const doc of docsEnviados.slice(0, 8)) {
-          if (doc.arquivoUrl) {
-            const url = doc.arquivoUrl.startsWith("/") ? `${process.env.BUILT_IN_FORGE_API_URL?.replace("/api", "") ?? ""}${doc.arquivoUrl}` : doc.arquivoUrl;
-            const ext = (doc.nomeDocumento || "").toLowerCase();
-            if (ext.endsWith(".pdf")) {
-              contentParts.push({ type: "file_url", file_url: { url, mime_type: "application/pdf" } });
-            } else {
-              contentParts.push({ type: "image_url", image_url: { url, detail: "auto" } });
-            }
+
+        // Buscar todas as versões para ter todos os arquivos por documento
+        const todasVersoes: Record<number, string[]> = {};
+        for (const doc of docsEnviados) {
+          try {
+            const versoes = await getVersoesDocumento(doc.id);
+            todasVersoes[doc.id] = versoes.map((v: any) => v.arquivoUrl).filter(Boolean);
+          } catch {
+            todasVersoes[doc.id] = doc.arquivoUrl ? [doc.arquivoUrl] : [];
           }
         }
+
+        // Helper para construir URL pública para o LLM
+        const buildPublicUrl = (url: string) => {
+          if (!url) return url;
+          if (url.startsWith("/manus-storage/") || url.startsWith("/")) {
+            return `${process.env.BUILT_IN_FORGE_API_URL?.replace("/api", "") ?? ""}${url}`;
+          }
+          return url;
+        };
+
+        const systemPrompt = `Você é um Analista Documental Sênior da Ativa Soluções, especializado em crédito com garantia real (Home Equity, Auto Equity, Rural Equity, Imóvel em Construção).
+
+SUA MISSÃO: Realizar pré-análise documental completa e rigorosa de cada documento enviado.
+
+PARA CADA DOCUMENTO ANALISE:
+1. Tipo e correspondência: o documento é realmente o que se declara ser?
+2. Legibilidade: está legível, sem cortes, sem partes ilegíveis?
+3. Validade: está dentro do prazo? (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
+4. Pertinência ao titular: pertence ao tomador ou cônjuge declarado?
+5. Completude: está completo ou faltam páginas?
+6. Consistência: dados batem com o restante da operação?
+
+SEMÁFORO:
+- verde: documento válido, legível, completo e dentro do prazo
+- amarelo: presente mas com ressalva (data próxima do vencimento, qualidade reduzida, dado não confirmado)
+- vermelho: ausente, vencido, ilegível, incorreto ou inconsistente
+
+ALÉM DA ANÁLISE, EXTRAIA AUTOMATICAMENTE:
+- Do RG/CNH: nome_completo, cpf, rg, data_nascimento, estado_civil
+- Do comprovante de renda: renda_mensal_estimada, profissao
+- Da matrícula/IPTU: matricula_imovel, endereco_imovel, metragem, cidade_imovel, uf_imovel, titularidade, onus
+- Do extrato bancário: saldo_medio_estimado, banco
+- Do IRPF: renda_declarada
+
+RETORNE JSON ESTRITAMENTE NESTE FORMATO:
+{
+  "documentos": [
+    {
+      "id": number,
+      "nome": string,
+      "semaforo": "verde" | "amarelo" | "vermelho",
+      "tipo_identificado": string,
+      "legivel": boolean,
+      "pertence_ao_cliente": boolean | null,
+      "observacao": string,
+      "dados_extraidos": {
+        "titular_identificado": string | null,
+        "data_emissao": string | null,
+        "validade": string | null,
+        "numero_documento": string | null
+      }
+    }
+  ],
+  "dados_extraidos_operacao": {
+    "nome_completo": string | null,
+    "cpf": string | null,
+    "rg": string | null,
+    "data_nascimento": string | null,
+    "estado_civil": string | null,
+    "profissao": string | null,
+    "renda_mensal_estimada": string | null,
+    "matricula_imovel": string | null,
+    "endereco_imovel": string | null,
+    "metragem": string | null,
+    "cidade_imovel": string | null,
+    "uf_imovel": string | null,
+    "titularidade": string | null,
+    "onus": string | null,
+    "saldo_medio_estimado": string | null,
+    "banco": string | null
+  },
+  "pendencias_criticas": [string],
+  "pendencias_secundarias": [string],
+  "documentos_ausentes": [string],
+  "situacao_geral": "Completa" | "Pendências secundárias" | "Pendências relevantes" | "Necessita regularização" | "Pronta para análise sênior",
+  "pode_prosseguir": boolean,
+  "resumo_documental": string
+}
+
+REGRAS PARA pode_prosseguir:
+- true: sem documentos vermelhos críticos (pode ter amarelos ou ausentes secundários)
+- false: qualquer documento ilegível, incorreto, vencido ou ausente obrigatório
+
+REGRAS ABSOLUTAS:
+- NUNCA invente dados não presentes nos documentos
+- Se não conseguir identificar um dado, use null
+- Seja objetivo e técnico
+- Responda APENAS com JSON válido, sem markdown`;
+
+        const contentParts: any[] = [
+          {
+            type: "text",
+            text: `Realize a pré-análise documental completa da operação ${op.codigoOperacao}.
+INFORMAÇÕES DA OPERAÇÃO:
+- Produto: ${op.produto}
+- Cliente/Tomador: ${op.nomeCliente} (CPF: ${op.cpf})
+- Cônjuge: ${op.nomeConjuge ? `${op.nomeConjuge} (CPF: ${op.cpfConjuge})` : "Não informado"}
+- Estado Civil: ${op.estadoCivil}
+- Valor Solicitado: R$ ${Number(op.valorSolicitado).toLocaleString("pt-BR")}
+- Prazo: ${op.prazo} meses
+- Finalidade: ${op.finalidade ?? "Não informada"}
+
+CHECKLIST (${docs.length} documentos):
+${docs.map((d: any) => `- [${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}] ID:${d.id} | ${d.nomeDocumento} (${d.categoria})`).join("\n")}
+
+DOCUMENTOS AUSENTES: ${docsPendentes.map((d: any) => d.nomeDocumento).join(", ") || "Nenhum"}
+
+Analise cada documento enviado abaixo e retorne o JSON completo.`,
+          },
+        ];
+
+        // Adicionar até 10 arquivos para análise
+        let arquivosAdicionados = 0;
+        for (const doc of docsEnviados) {
+          if (arquivosAdicionados >= 10) break;
+          const urls = todasVersoes[doc.id] ?? (doc.arquivoUrl ? [doc.arquivoUrl] : []);
+          const urlRecente = urls[0];
+          if (!urlRecente) continue;
+          const publicUrl = buildPublicUrl(urlRecente);
+          const mimeType = urlRecente.toLowerCase().includes(".pdf") ? "application/pdf" : undefined;
+          if (mimeType) {
+            contentParts.push({ type: "file_url", file_url: { url: publicUrl, mime_type: mimeType } });
+          } else {
+            contentParts.push({ type: "image_url", image_url: { url: publicUrl, detail: "high" } });
+          }
+          contentParts.push({ type: "text", text: `[Documento acima: ID=${doc.id} | ${doc.nomeDocumento} | Categoria: ${doc.categoria}]` });
+          arquivosAdicionados++;
+        }
+
         try {
           const response = await invokeLLM({
             messages: [
-              { role: "system", content: "Você é um analista de crédito sênior. Analise os documentos e retorne JSON estruturado." },
+              { role: "system", content: systemPrompt },
               { role: "user", content: contentParts },
             ],
             response_format: { type: "json_object" } as any,
@@ -1029,16 +1153,52 @@ Gere a revisão completa seguindo a estrutura de 10 seções obrigatórias.`;
           const rawContent = response.choices[0]?.message?.content;
           const conteudo = typeof rawContent === "string" ? rawContent : "{}";
           const resultado = JSON.parse(conteudo);
-          const aprovado = resultado.aprovado === true && pendentes.length === 0;
+
+          const podeProsseguir = resultado.pode_prosseguir === true;
+          const situacaoGeral = resultado.situacao_geral ?? (podeProsseguir ? "Pendências secundárias" : "Pendências relevantes");
+
+          // Atualizar status da operação
+          const novoStatusMacro = podeProsseguir ? "Documentação completa" : "Aguardando documentos";
           await updateOperacao(input.operacaoId, {
-            statusValidacaoIa: aprovado ? "Validado" : "Pendência encontrada",
+            statusValidacaoIa: podeProsseguir ? "Validado" : "Pendência encontrada",
+            statusMacro: novoStatusMacro,
           });
+          await addHistoricoStatus({
+            operacaoId: input.operacaoId,
+            statusAnterior: op.statusMacro,
+            statusNovo: novoStatusMacro,
+            alteradoPor: user.id,
+          });
+
+          // Salvar dados extraídos no perfilExtratidoJson
+          if (resultado.dados_extraidos_operacao) {
+            await updateOperacao(input.operacaoId, {
+              perfilExtraidoJson: resultado.dados_extraidos_operacao,
+            });
+          }
+
+          // Disparar notificação para admins quando documentação completa
+          if (podeProsseguir) {
+            const admins = await getAdmins();
+            for (const admin of admins) {
+              await createNotificacao({
+                usuarioId: admin.id,
+                operacaoId: input.operacaoId,
+                tipo: "documentacao_completa",
+                mensagem: `Documentação de ${op.nomeCliente} (${op.codigoOperacao}) validada pela IA — pronta para análise.`,
+              });
+            }
+          }
+
           return {
-            aprovado,
-            pendencias: pendentes.length > 0 ? pendentes : (resultado.pendencias ?? []),
-            observacoes: resultado.observacoes ?? "",
-            documentos_analisados: resultado.documentos_analisados ?? docsEnviados.length,
-            resumo: resultado.resumo ?? "",
+            aprovado: podeProsseguir,
+            situacaoGeral,
+            documentosPorStatus: resultado.documentos ?? [],
+            dadosExtraidos: resultado.dados_extraidos_operacao ?? null,
+            pendenciasCriticas: resultado.pendencias_criticas ?? [],
+            pendenciasSecundarias: resultado.pendencias_secundarias ?? [],
+            documentosAusentes: resultado.documentos_ausentes ?? [],
+            resumo: resultado.resumo_documental ?? "",
             checklist_total: checklistTotal,
             checklist_concluidos: checklistConcluidos,
           };
