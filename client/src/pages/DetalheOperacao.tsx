@@ -135,7 +135,7 @@ export default function DetalheOperacao({ params }: Props) {
           {activeTab === "documentos" && <TabDocumentos operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} />}
           {activeTab === "dados" && <TabDados operacao={operacao} isAdmin={isAdmin} onRefetch={refetch} userId={(user as any)?.id} />}
           {activeTab === "ia" && isAdmin && <TabAnaliseIA operacaoId={operacaoId} operacao={operacao} userId={(user as any)?.id} />}
-          {activeTab === "ifs" && <TabIFs operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} />}
+          {activeTab === "ifs" && <TabIFs operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} produto={(operacao as any)?.produto} />}
           {activeTab === "historico" && <TabHistorico operacaoId={operacaoId} />}
         </div>
       </div>
@@ -630,9 +630,13 @@ function TabAnaliseIA({ operacaoId, operacao, userId }: { operacaoId: number; op
 
 // ─── Tab IFs ──────────────────────────────────────────────────────────────────
 
-function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: boolean; userId: number }) {
+function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; isAdmin: boolean; userId: number; produto?: string }) {
   const { data: ifs, isLoading, refetch } = trpc.ifs.listar.useQuery({ operacaoId });
-  const { data: ifsAtivas } = trpc.ifCadastros.listarAtivas.useQuery(undefined, { enabled: isAdmin });
+  // Usa filtro por produto quando disponível; fallback para lista completa
+  const { data: ifsAtivas } = trpc.ifCadastros.listarAtivasPorProduto.useQuery(
+    { produto: produto ?? undefined },
+    { enabled: isAdmin }
+  );
   const criarMutation = trpc.ifs.criar.useMutation({
     onSuccess: () => { refetch(); setShowForm(false); setNovaIF({ ifCadastroId: 0, dataEnvio: "", prazoRetornoEstimado: "", proximaAcao: "" }); toast.success("IF adicionada e distribuição registrada!"); },
     onError: (e) => toast.error("Erro: " + e.message),
@@ -667,6 +671,18 @@ function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: 
             <h3 className="text-sm font-semibold text-foreground">Enviar para Instituição Financeira</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Selecione uma IF parceira cadastrada. A distribuição será registrada automaticamente para rastreabilidade.</p>
           </div>
+          {/* Aviso de filtro por produto */}
+          {produto && (
+            <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-primary/8 border border-primary/20">
+              <Building2 className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-primary/80">
+                Exibindo apenas IFs com condições cadastradas para <strong>{produto}</strong>.
+                {(ifsAtivas ?? []).length === 0
+                  ? " Nenhuma IF ativa possui esse produto — cadastre condições na tela de IFs."
+                  : ` ${(ifsAtivas ?? []).length} IF${(ifsAtivas ?? []).length !== 1 ? "s" : ""} disponível${(ifsAtivas ?? []).length !== 1 ? "is" : ""}.`}
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
               <label className="text-xs text-muted-foreground mb-1 block">Instituição Financeira *</label>
@@ -675,7 +691,11 @@ function TabIFs({ operacaoId, isAdmin, userId }: { operacaoId: number; isAdmin: 
                 value={novaIF.ifCadastroId || ""}
                 onChange={(e) => setNovaIF((p) => ({ ...p, ifCadastroId: Number(e.target.value) }))}
               >
-                <option value="">Selecione uma IF parceira...</option>
+                <option value="">
+                  {(ifsAtivas ?? []).length === 0 && produto
+                    ? "Nenhuma IF disponível para este produto"
+                    : "Selecione uma IF parceira..."}
+                </option>
                 {(ifsAtivas ?? []).map((if_) => (
                   <option key={if_.id} value={if_.id}>{if_.nome}</option>
                 ))}

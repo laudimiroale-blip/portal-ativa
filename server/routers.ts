@@ -33,6 +33,7 @@ import {
   marcarNotificacaoLida,
   marcarTodasNotificacoesLidas,
   getIFsAtivas,
+  getIFsAtivasPorProduto,
   getMetricasPorIF,
   getHistoricoDistribuicoesByIF,
   getAdmins,
@@ -1874,6 +1875,11 @@ Resultado Documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.res
     listarAtivas: protectedProcedure.query(async () => {
       return getIFsAtivas();
     }),
+    listarAtivasPorProduto: protectedProcedure
+      .input(z.object({ produto: z.string().optional() }))
+      .query(async ({ input }) => {
+        return getIFsAtivasPorProduto(input.produto);
+      }),
     metricasPorIF: protectedProcedure
       .input(z.object({ ifId: z.number() }))
       .query(async ({ input }) => {

@@ -714,6 +714,41 @@ export async function getIFsAtivas() {
     .where(and(eq(ifCadastros.status, "Ativa"), isNull(ifCadastros.deletedAt)))
     .orderBy(ifCadastros.nome);
 }
+
+/**
+ * Retorna IFs ativas que possuem condições cadastradas para o produto informado.
+ * Se nenhum produto for informado, retorna todas as IFs ativas (comportamento legado).
+ */
+export async function getIFsAtivasPorProduto(produto?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  if (!produto) return getIFsAtivas();
+
+  // Busca IDs das IFs que têm condição cadastrada para o produto
+  const condicoes = await db
+    .select({ ifId: ifCondicoes.ifId })
+    .from(ifCondicoes)
+    .where(eq(ifCondicoes.produto, produto as any));
+
+  const ifIdsComProduto = Array.from(new Set(condicoes.map((c) => c.ifId)));
+
+  if (ifIdsComProduto.length === 0) {
+    // Nenhuma IF tem esse produto cadastrado — retorna lista vazia com flag
+    return [];
+  }
+
+  return db
+    .select({ id: ifCadastros.id, nome: ifCadastros.nome, cnpj: ifCadastros.cnpj })
+    .from(ifCadastros)
+    .where(
+      and(
+        eq(ifCadastros.status, "Ativa"),
+        isNull(ifCadastros.deletedAt),
+        sql`${ifCadastros.id} IN (${sql.join(ifIdsComProduto.map((id) => sql`${id}`), sql`, `)})`
+      )
+    )
+    .orderBy(ifCadastros.nome);
+}
 export async function getMetricasPorIF(ifId: number) {
   const db = await getDb();
   if (!db) return null;
