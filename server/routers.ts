@@ -990,6 +990,64 @@ Gere a revisão completa seguindo a estrutura de 10 seções obrigatórias.`;
         }
       }),
 
+        classificarDocumentos: protectedProcedure
+      .input(z.object({
+        operacaoId: z.number(),
+        arquivos: z.array(z.object({
+          nome: z.string(),
+          mimeType: z.string(),
+          tamanhoBytes: z.number(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = ctx.user as any;
+        const op = await getOperacaoById(input.operacaoId);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        if (user.perfil !== "admin" && user.perfil !== "operacional" && op.assessorId !== user.id)
+          throw new TRPCError({ code: "FORBIDDEN" });
+
+        const docs = await getDocumentosByOperacao(input.operacaoId);
+        const checklistItems = docs.map((d: any) => ({ id: d.id, nome: d.nomeDocumento, categoria: d.categoria }));
+
+        const prompt = `Você é um classificador de documentos para operações de crédito com garantia (Home Equity, Auto Equity, Rural Equity, Imóvel em Construção).
+
+Checklist de documentos esperados para esta operação:
+${checklistItems.map((c: any) => `- ID ${c.id}: ${c.nome} (${c.categoria})`).join("\n")}
+
+Arquivos enviados pelo usuário:
+${input.arquivos.map((a, i) => `${i + 1}. "${a.nome}" (${a.mimeType}, ${(a.tamanhoBytes / 1024).toFixed(0)} KB)`).join("\n")}
+
+Para cada arquivo, determine qual item do checklist ele corresponde com base no nome do arquivo e tipo MIME.
+Se não conseguir classificar com confiança, use documentoId: null.
+
+Responda em JSON com este formato exato:
+{
+  "classificacoes": [
+    { "indiceArquivo": 0, "documentoId": 123, "confianca": "alta", "motivo": "Nome contém RG" },
+    { "indiceArquivo": 1, "documentoId": null, "confianca": "baixa", "motivo": "Nome genérico, não identificado" }
+  ]
+}`;
+
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "Você é um classificador de documentos. Responda apenas com JSON válido, sem markdown." },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        let classificacoes: Array<{ indiceArquivo: number; documentoId: number | null; confianca: string; motivo: string }> = [];
+        try {
+          const parsed = JSON.parse(response.choices[0].message.content as string);
+          classificacoes = parsed.classificacoes ?? [];
+        } catch {
+          // fallback: todos não classificados
+          classificacoes = input.arquivos.map((_, i) => ({ indiceArquivo: i, documentoId: null, confianca: "baixa", motivo: "Erro ao classificar" }));
+        }
+
+        return { classificacoes, checklistItems };
+      }),
+
         conferirDocumentos: protectedProcedure
       .input(z.object({ operacaoId: z.number() }))
       .mutation(async ({ ctx, input }) => {

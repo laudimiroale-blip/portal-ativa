@@ -25,6 +25,8 @@ import {
   Upload,
   User,
   XCircle,
+  FolderOpen,
+  Layers,
 } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -553,6 +555,143 @@ function Etapa3Documentos({
   } | null>(null);
   const [conferindo, setConferindo] = useState(false);
 
+  // Upload em lote
+  const classificarMutation = trpc.ia.classificarDocumentos.useMutation();
+  const loteInputRef = useRef<HTMLInputElement | null>(null);
+  type ArquivoLote = {
+    id: string;
+    file: File;
+    status: "aguardando" | "classificando" | "enviando" | "enviado" | "nao_classificado" | "erro";
+    documentoId: number | null;
+    documentoNome: string | null;
+    confianca: string | null;
+    motivo: string | null;
+    erro?: string;
+  };
+  const [arquivosLote, setArquivosLote] = useState<ArquivoLote[]>([]);
+  const [classificando, setClassificando] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const processarLote = useCallback(async (files: FileList | File[]) => {
+    if (!operacaoId || !documentos) return;
+    const filesArr = Array.from(files);
+    if (filesArr.length === 0) return;
+
+    // Detectar duplicatas
+    const nomesExistentes = new Set(arquivosLote.map((a) => `${a.file.name}-${a.file.size}`));
+    const novos: File[] = [];
+    const duplicados: string[] = [];
+    for (const f of filesArr) {
+      const key = `${f.name}-${f.size}`;
+      if (nomesExistentes.has(key)) duplicados.push(f.name);
+      else novos.push(f);
+    }
+    if (duplicados.length > 0) {
+      toast.warning(`${duplicados.length} arquivo(s) duplicado(s) ignorado(s): ${duplicados.slice(0, 3).join(", ")}${duplicados.length > 3 ? "..." : ""}`);
+    }
+    if (novos.length === 0) return;
+
+    // Adicionar na fila com status aguardando
+    const novosLote: ArquivoLote[] = novos.map((f) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file: f,
+      status: "aguardando" as const,
+      documentoId: null,
+      documentoNome: null,
+      confianca: null,
+      motivo: null,
+    }));
+    setArquivosLote((prev) => [...prev, ...novosLote]);
+
+    // Classificar com IA
+    setClassificando(true);
+    setArquivosLote((prev) =>
+      prev.map((a) => novosLote.find((n) => n.id === a.id) ? { ...a, status: "classificando" as const } : a)
+    );
+    try {
+      const resultado = await classificarMutation.mutateAsync({
+        operacaoId,
+        arquivos: novos.map((f) => ({ nome: f.name, mimeType: f.type || "application/octet-stream", tamanhoBytes: f.size })),
+      });
+
+      // Mapear resultado de volta para os arquivos da fila
+      const mapa = new Map(resultado.classificacoes.map((c) => [c.indiceArquivo, c]));
+      const checklistMap = new Map(resultado.checklistItems.map((c: any) => [c.id, c.nome]));
+
+      // Atualizar status e documentoId
+      const lotesAtualizados = novosLote.map((a, idx) => {
+        const cl = mapa.get(idx);
+        if (!cl) return { ...a, status: "nao_classificado" as const };
+        return {
+          ...a,
+          status: "aguardando" as const,
+          documentoId: cl.documentoId,
+          documentoNome: cl.documentoId ? (checklistMap.get(cl.documentoId) ?? null) : null,
+          confianca: cl.confianca,
+          motivo: cl.motivo,
+        };
+      });
+
+      setArquivosLote((prev) =>
+        prev.map((a) => {
+          const atualizado = lotesAtualizados.find((n) => n.id === a.id);
+          return atualizado ?? a;
+        })
+      );
+
+      // Fazer upload de cada arquivo classificado
+      for (const arq of lotesAtualizados) {
+        if (arq.file.size > 20 * 1024 * 1024) {
+          setArquivosLote((prev) => prev.map((a) => a.id === arq.id ? { ...a, status: "erro" as const, erro: "Arquivo muito grande (máx. 20MB)" } : a));
+          continue;
+        }
+        setArquivosLote((prev) => prev.map((a) => a.id === arq.id ? { ...a, status: "enviando" as const } : a));
+        try {
+          const base64 = await fileToBase64(arq.file);
+          // Se classificado, vincular ao documentoId; se não, usar primeiro doc como complementar
+          const docAlvo = arq.documentoId
+            ? documentos.find((d) => d.id === arq.documentoId)
+            : null;
+          const docComplementar = documentos[documentos.length - 1]; // fallback
+          const docFinal = docAlvo ?? docComplementar;
+          if (!docFinal) { setArquivosLote((prev) => prev.map((a) => a.id === arq.id ? { ...a, status: "erro" as const, erro: "Nenhum item do checklist disponível" } : a)); continue; }
+          await uploadMutation.mutateAsync({
+            operacaoId,
+            documentoId: docFinal.id,
+            nomeDocumento: docFinal.nomeDocumento,
+            categoria: docFinal.categoria,
+            fileBase64: base64,
+            fileName: arq.file.name,
+            mimeType: arq.file.type || "application/octet-stream",
+          });
+          setArquivosLote((prev) => prev.map((a) => a.id === arq.id ? { ...a, status: "enviado" as const } : a));
+        } catch (err: any) {
+          setArquivosLote((prev) => prev.map((a) => a.id === arq.id ? { ...a, status: "erro" as const, erro: err.message } : a));
+        }
+      }
+      refetch();
+      setResultadoConferencia(null);
+      toast.success(`${lotesAtualizados.filter((a) => a.documentoId !== null).length} arquivo(s) processado(s) com sucesso.`);
+    } catch (err: any) {
+      setArquivosLote((prev) =>
+        prev.map((a) => novosLote.find((n) => n.id === a.id) ? { ...a, status: "erro" as const, erro: "Erro na classificação" } : a)
+      );
+      toast.error("Erro ao classificar documentos: " + err.message);
+    } finally {
+      setClassificando(false);
+    }
+  }, [operacaoId, documentos, arquivosLote, classificarMutation, uploadMutation, refetch]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length > 0) processarLote(e.dataTransfer.files);
+  }, [processarLote]);
+
+  const removerArquivoLote = (id: string) => {
+    setArquivosLote((prev) => prev.filter((a) => a.id !== id));
+  };
+
   const enviados = documentos?.filter((d) => d.estado !== "Pendente") ?? [];
   const total = documentos?.length ?? 0;
   const progresso = total > 0 ? Math.round((enviados.length / total) * 100) : 0;
@@ -672,13 +811,99 @@ function Etapa3Documentos({
 
   const podeProsseguir = resultadoConferencia?.aprovado === true;
 
-  return (
+    return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-1">Documentos — {produto}</h2>
         <p className="text-sm text-muted-foreground">
           Envie os documentos do checklist. Você pode anexar mais de um arquivo por item.
         </p>
+      </div>
+
+      {/* Área de Upload em Lote */}
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 overflow-hidden">
+        <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+          <Layers className="w-4 h-4 text-primary" />
+          <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Upload de Documentação em Lote</span>
+        </div>
+        <div
+          className={cn(
+            "mx-4 mb-4 rounded-lg border-2 border-dashed transition-colors cursor-pointer",
+            dragOver ? "border-primary bg-primary/10" : "border-border hover:border-primary/60 hover:bg-muted/50"
+          )}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => loteInputRef.current?.click()}
+        >
+          <div className="flex flex-col items-center justify-center py-8 px-4 text-center pointer-events-none">
+            <FolderOpen className={cn("w-10 h-10 mb-3", dragOver ? "text-primary" : "text-muted-foreground")} />
+            <p className="text-sm text-foreground">
+              Arraste ou <span className="text-primary font-semibold">clique para selecionar</span> todos os documentos da operação
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              PDF · JPG · PNG · HEIC · WEBP · DOC · DOCX · XLS · XLSX — até 20MB por arquivo
+            </p>
+            {classificando && (
+              <div className="flex items-center gap-2 mt-3 text-xs text-primary">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Classificando com IA...</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <input
+          ref={loteInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx,.xls,.xlsx"
+          className="hidden"
+          onChange={(e) => { if (e.target.files) { processarLote(e.target.files); e.target.value = ""; } }}
+        />
+
+        {/* Lista de arquivos do lote */}
+        {arquivosLote.length > 0 && (
+          <div className="px-4 pb-4 space-y-2">
+            <p className="text-xs text-muted-foreground font-medium">{arquivosLote.length} arquivo(s) na fila</p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {arquivosLote.map((arq) => (
+                <div key={arq.id} className="flex items-center gap-2 rounded-md bg-background/60 border border-border px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{arq.file.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {arq.documentoNome
+                        ? <span className="text-emerald-400">→ {arq.documentoNome}</span>
+                        : arq.status === "nao_classificado"
+                        ? <span className="text-amber-400">Não classificado</span>
+                        : arq.status === "classificando"
+                        ? <span className="text-primary">Classificando...</span>
+                        : arq.motivo ?? ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0">
+                    {arq.status === "aguardando" && <span className="text-[10px] text-muted-foreground">Aguardando</span>}
+                    {arq.status === "classificando" && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                    {arq.status === "enviando" && <Loader2 className="w-3 h-3 animate-spin text-amber-400" />}
+                    {arq.status === "enviado" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                    {arq.status === "nao_classificado" && <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />}
+                    {arq.status === "erro" && (
+                      <span title={arq.erro}>
+                        <XCircle className="w-3.5 h-3.5 text-red-400" />
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removerArquivoLote(arq.id); }}
+                    className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                    title="Remover"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

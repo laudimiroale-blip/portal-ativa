@@ -168,3 +168,14 @@
 - [ ] Exibir dados extraídos automaticamente pela IA após análise
 - [ ] Botão "Prosseguir" liberado quando documentos mínimos válidos (mesmo com pendências secundárias)
 - [ ] Bloquear avanço APENAS quando houver documento ilegível, errado, ausente obrigatório ou divergência grave
+
+## Upload em Lote com Classificação por IA — Etapa 3
+- [x] Área de drag-and-drop no topo da Etapa 3: "UPLOAD DE DOCUMENTAÇÃO EM LOTE"
+- [x] Aceitar PDF, JPG, PNG, HEIC, WEBP, DOC, DOCX, XLS, XLSX até 20MB por arquivo
+- [x] Router ia.classificarDocumentos: recebe lista de nomes/tipos de arquivos + checklist do produto, retorna mapeamento arquivo→documentoId
+- [x] Após classificação, fazer upload de cada arquivo para o documentoId correspondente
+- [x] Arquivos não classificados vão para o último item do checklist (complementar)
+- [x] Detectar duplicatas por nome+tamanho e exibir aviso antes de enviar
+- [x] Lista geral dos arquivos enviados em lote com status (classificando/enviando/enviado/erro) e botão remover
+- [x] Não apagar arquivos já adicionados individualmente
+- [x] Manter upload individual por item do checklist funcionando normalmente
