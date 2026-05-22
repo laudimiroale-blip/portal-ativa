@@ -317,12 +317,32 @@ function Etapa2DadosOperacao({
         onNext(result.codigoOperacao, 0);
       }
     } catch (err: any) {
-      toast.error("Erro ao criar operação: " + err.message);
+      // Log técnico apenas no console
+      console.error("[NovaOperacao] Erro ao criar:", err);
+      // Mensagem amigável ao usuário
+      const msg = err?.data?.code === "UNAUTHORIZED"
+        ? "Sessão expirada. Faça login novamente."
+        : err?.data?.code === "FORBIDDEN"
+        ? "Você não tem permissão para criar operações."
+        : err?.data?.code === "BAD_REQUEST"
+        ? "Dados inválidos. Verifique os campos e tente novamente."
+        : "Não foi possível salvar a operação. Tente novamente em instantes.";
+      toast.error(msg);
     }
   };
 
-  const ltv = dados.valorSolicitado && dados.valorGarantia && parseFloat(dados.valorGarantia.replace(",", ".")) > 0
-    ? ((parseFloat(dados.valorSolicitado.replace(",", ".")) / parseFloat(dados.valorGarantia.replace(",", "."))) * 100).toFixed(1)
+  // Normaliza valor monetário para cálculo de LTV (suporta 1.000.000,00 e 1000000)
+  const parseLTV = (v?: string): number => {
+    if (!v) return 0;
+    const clean = v.replace(/[^\d.,]/g, "");
+    if (clean.includes(",")) return parseFloat(clean.replace(/\./g, "").replace(",", ".")) || 0;
+    const parts = clean.split(".");
+    if (parts.length > 2) return parseFloat(parts.join("")) || 0;
+    return parseFloat(clean) || 0;
+  };
+
+  const ltv = dados.valorSolicitado && dados.valorGarantia && parseLTV(dados.valorGarantia) > 0
+    ? ((parseLTV(dados.valorSolicitado) / parseLTV(dados.valorGarantia)) * 100).toFixed(1)
     : null;
 
   return (

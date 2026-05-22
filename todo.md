@@ -53,11 +53,11 @@
 - [x] Zero erros de TypeScript
 - [x] Checkpoint final e entrega ao usuário
 
-## Pendências Futuras (Módulo 2)
-- [ ] Portal do cliente (link com token LGPD)
-- [ ] Upload de documentos pelo cliente via link
-- [ ] Consentimento LGPD digital
-- [ ] Relatórios e exportação PDF
+## Pendências Futuras (Módulo 2) — fora do escopo MVP atual
+- [ ] Portal do cliente (link com token LGPD) — Módulo 2
+- [ ] Upload de documentos pelo cliente via link — Módulo 2
+- [ ] Consentimento LGPD digital — Módulo 2
+- [ ] Relatórios e exportação PDF — Módulo 2
 - [x] Gestão de usuários (tela admin) — implementado no Módulo 07
 
 ## V1 Definitiva — Evoluções (Pasted_content_08)
@@ -139,3 +139,14 @@
 - [x] Métricas por IF na tela /ifs: total enviado, aprovadas, reprovadas, SLA médio
 - [x] Granularidade da fila operacional: adicionar categorias "Documentos ilegíveis" e "Aguardando SCR"
 - [x] SLA avançado: 4 alertas distintos (24h sem movimentação, docs 48h, prazo bancário vencido, 7 dias parada)
+
+## Correção Persistência Nova Operação
+
+- [ ] Mapear schema real da tabela operacoes e alinhar com router criar
+- [ ] Converter valorSolicitado e valorGarantia de string formatada para número antes do INSERT
+- [ ] Padronizar produto como slug (home_equity, auto_equity, rural_equity, imovel_construcao)
+- [ ] Garantir que nenhum campo inexistente seja enviado no INSERT
+- [ ] Exibir erro amigável ao usuário (toast) e log técnico apenas no console
+- [ ] Testar criar operação no desktop e mobile
+- [ ] Testar salvar rascunho
+- [ ] Testar criar e continuar

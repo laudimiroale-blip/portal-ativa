@@ -193,6 +193,25 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const user = ctx.user as any;
         const codigo = await gerarCodigoOperacao();
+        // Normaliza valores monetários: remove pontos de milhar, troca vírgula por ponto
+        const parseMoney = (v?: string): string => {
+          if (!v) return "0";
+          // Remove tudo exceto dígitos, vírgula e ponto
+          const clean = v.replace(/[^\d.,]/g, "");
+          // Se tem vírgula, trata como separador decimal BR (1.000.000,00 → 1000000.00)
+          if (clean.includes(",")) {
+            return clean.replace(/\./g, "").replace(",", ".");
+          }
+          // Se só tem pontos, verifica se é milhar (1.000.000) ou decimal (1000.50)
+          const parts = clean.split(".");
+          if (parts.length > 2) {
+            // Múltiplos pontos = separador de milhar (1.000.000)
+            return parts.join("");
+          }
+          return clean;
+        };
+        const valorSolicitadoNorm = parseMoney(input.valorSolicitado);
+        const valorGarantiaNorm = input.valorGarantia ? parseMoney(input.valorGarantia) : undefined;
         await createOperacao({
           codigoOperacao: codigo,
           nomeCliente: input.nomeCliente,
@@ -205,7 +224,7 @@ export const appRouter = router({
           emailConjuge: input.emailConjuge,
           telefoneConjuge: input.telefoneConjuge,
           produto: input.produto,
-          valorSolicitado: input.valorSolicitado,
+          valorSolicitado: valorSolicitadoNorm,
           prazo: input.prazo,
           finalidade: input.finalidade,
           contextoOperacao: input.contextoOperacao,
@@ -214,7 +233,7 @@ export const appRouter = router({
           statusRascunho: input.statusRascunho,
           statusMacro: "Pré-cadastro",
           statusValidacaoIa: "Não analisado",
-          valorGarantia: input.valorGarantia,
+          valorGarantia: valorGarantiaNorm,
           tipoGarantiaDescricao: input.tipoGarantiaDescricao,
           etapaAtual: input.etapaAtual ?? 1,
           responsavelOperacionalId: input.responsavelOperacionalId,
