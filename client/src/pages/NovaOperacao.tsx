@@ -809,7 +809,8 @@ function Etapa3Documentos({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const podeProsseguir = resultadoConferencia?.aprovado === true;
+  // Fase de testes: avanço sempre liberado — alertas visuais mantidos
+  const podeProsseguir = true;
 
     return (
     <div className="space-y-6">
@@ -1154,9 +1155,7 @@ function Etapa3Documentos({
           </Button>
           <Button
             onClick={onNext}
-            disabled={!podeProsseguir}
-            className={cn("btn-primary gap-2", !podeProsseguir && "opacity-50 cursor-not-allowed")}
-            title={!podeProsseguir ? "Confira a documentação antes de prosseguir" : undefined}
+            className="btn-primary gap-2"
           >
             Prosseguir
             <ArrowRight className="w-4 h-4" />
@@ -1482,7 +1481,6 @@ function Etapa4ResumoDefesa({
           )}
           <Button
             onClick={onNext}
-            disabled={!defesaAprovada && !defesaAtual}
             className="btn-primary gap-2"
           >
             Continuar para SCR / Enviar

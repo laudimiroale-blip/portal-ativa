@@ -179,3 +179,28 @@
 - [x] Lista geral dos arquivos enviados em lote com status (classificando/enviando/enviado/erro) e botão remover
 - [x] Não apagar arquivos já adicionados individualmente
 - [x] Manter upload individual por item do checklist funcionando normalmente
+
+## Bloco 1 — Limpar Base de Testes (Pasted_content_19)
+- [x] DELETE de todas as operações e dados relacionados (documentos, versoes_documento, if_distribuicoes, notificacoes, logs_auditoria)
+- [x] DELETE do usuário "Pedro Aqui o Silva"
+
+## Bloco 2 — Criar Usuários de Teste (Pasted_content_19)
+- [x] INSERT Alexandre (role=admin) — já existia no banco
+- [x] INSERT Renata (role=admin)
+- [x] INSERT Consultor 1 (role=assessor)
+- [x] INSERT Consultor 2 (role=assessor)
+- [x] INSERT Consultor 3 (role=assessor)
+
+## Bloco 3 — Liberar Avanço entre Etapas (Pasted_content_19)
+- [x] Remover bloqueio rígido de avanço na Etapa 3 (conferência documental) — manter alertas visuais
+- [x] Verificar e remover bloqueio rígido em qualquer outra etapa do wizard (Etapa 4 também liberada)
+
+## Bloco 4 — Kanban na Fila Operacional (Pasted_content_19)
+- [x] Reescrever FilaOperacional.tsx como Kanban com 9 colunas
+- [x] Mapear status macro existentes para as 9 colunas do Kanban
+- [x] Cards com 10 campos: código ATV, nome cliente, produto, valor, status, responsável, prioridade, última movimentação, pendências, % completude documental
+- [x] Drag-and-drop entre colunas (HTML5 drag events nativos)
+- [x] Filtros: consultor, produto, status, prioridade (todos os 4 filtros implementados)
+- [x] Busca rápida por nome/código
+- [x] Cores por status, alertas operacionais, badges de pendência
+- [x] Manter identidade visual dark premium

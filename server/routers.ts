@@ -135,6 +135,7 @@ export const appRouter = router({
           busca: z.string().optional(),
           apenasMinhas: z.boolean().optional(),
           responsavelOperacionalId: z.number().optional(),
+          assessorId: z.number().optional(),
         }).optional()
       )
       .query(async ({ ctx, input }) => {
@@ -149,6 +150,8 @@ export const appRouter = router({
         };
         if (!isAdmin || input?.apenasMinhas) {
           filters.assessorId = user.id;
+        } else if (input?.assessorId) {
+          filters.assessorId = input.assessorId;
         }
         return getOperacoes(filters);
       }),
