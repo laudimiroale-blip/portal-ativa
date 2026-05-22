@@ -724,20 +724,28 @@ export async function getIFsAtivasPorProduto(produto?: string) {
   if (!db) return [];
   if (!produto) return getIFsAtivas();
 
-  // Busca IDs das IFs que têm condição cadastrada para o produto
+  // Busca condições do produto (com taxa e prazo) para cada IF
   const condicoes = await db
-    .select({ ifId: ifCondicoes.ifId })
+    .select({
+      ifId: ifCondicoes.ifId,
+      taxaMinima: ifCondicoes.taxaMinima,
+      prazoMaximo: ifCondicoes.prazoMaximo,
+    })
     .from(ifCondicoes)
     .where(eq(ifCondicoes.produto, produto as any));
 
   const ifIdsComProduto = Array.from(new Set(condicoes.map((c) => c.ifId)));
 
   if (ifIdsComProduto.length === 0) {
-    // Nenhuma IF tem esse produto cadastrado — retorna lista vazia com flag
     return [];
   }
 
-  return db
+  // Mapa de ifId -> condições para enriquecer o retorno
+  const condicoesMap = new Map(
+    condicoes.map((c) => [c.ifId, { taxaMinima: c.taxaMinima, prazoMaximo: c.prazoMaximo }])
+  );
+
+  const ifs = await db
     .select({ id: ifCadastros.id, nome: ifCadastros.nome, cnpj: ifCadastros.cnpj })
     .from(ifCadastros)
     .where(
@@ -748,6 +756,13 @@ export async function getIFsAtivasPorProduto(produto?: string) {
       )
     )
     .orderBy(ifCadastros.nome);
+
+  // Enriquece cada IF com taxa mínima e prazo máximo do produto
+  return ifs.map((if_) => ({
+    ...if_,
+    taxaMinima: condicoesMap.get(if_.id)?.taxaMinima ?? null,
+    prazoMaximo: condicoesMap.get(if_.id)?.prazoMaximo ?? null,
+  }));
 }
 export async function getMetricasPorIF(ifId: number) {
   const db = await getDb();

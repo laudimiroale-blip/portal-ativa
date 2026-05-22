@@ -648,8 +648,44 @@ function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; 
 
   const [showForm, setShowForm] = useState(false);
   const [novaIF, setNovaIF] = useState({ ifCadastroId: 0, dataEnvio: "", prazoRetornoEstimado: "", proximaAcao: "" });
+  // Para distribuição em lote (Selecionar Todas)
+  const [modoLote, setModoLote] = useState(false);
+  const [selecionadas, setSelecionadas] = useState<number[]>([]);
+  const [loteEnviando, setLoteEnviando] = useState(false);
 
   const STATUS_IF = ["Aguardando", "Em análise", "Aprovado", "Reprovado", "Stand-by"] as const;
+
+  const toggleSelecionada = (id: number) =>
+    setSelecionadas((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const selecionarTodas = () =>
+    setSelecionadas((ifsAtivas ?? []).map((if_) => if_.id));
+
+  const limparSelecao = () => setSelecionadas([]);
+
+  const enviarLote = async () => {
+    if (selecionadas.length === 0) return;
+    setLoteEnviando(true);
+    try {
+      for (const ifCadastroId of selecionadas) {
+        await criarMutation.mutateAsync({
+          operacaoId,
+          ifCadastroId,
+          dataEnvio: novaIF.dataEnvio || undefined,
+          prazoRetornoEstimado: novaIF.prazoRetornoEstimado || undefined,
+          proximaAcao: novaIF.proximaAcao || undefined,
+        });
+      }
+      toast.success(`${selecionadas.length} IF${selecionadas.length !== 1 ? "s" : ""} distribuída${selecionadas.length !== 1 ? "s" : ""} com sucesso!`);
+      setShowForm(false);
+      setModoLote(false);
+      setSelecionadas([]);
+    } catch {
+      toast.error("Erro ao distribuir em lote.");
+    } finally {
+      setLoteEnviando(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -667,40 +703,141 @@ function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; 
 
       {showForm && (
         <div className="card-premium p-4 rounded-lg space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Enviar para Instituição Financeira</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Selecione uma IF parceira cadastrada. A distribuição será registrada automaticamente para rastreabilidade.</p>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Enviar para Instituição Financeira</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Selecione uma IF parceira cadastrada. A distribuição será registrada automaticamente para rastreabilidade.</p>
+            </div>
+            {/* Botão alternar modo lote */}
+            {(ifsAtivas ?? []).length > 1 && (
+              <button
+                onClick={() => { setModoLote((v) => !v); setSelecionadas([]); }}
+                className={cn(
+                  "flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                  modoLote
+                    ? "bg-primary/15 text-primary border-primary/30"
+                    : "bg-muted/30 text-muted-foreground border-border hover:text-foreground"
+                )}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {modoLote ? "Modo individual" : "Selecionar múltiplas"}
+              </button>
+            )}
           </div>
+
           {/* Aviso de filtro por produto */}
           {produto && (
             <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-primary/8 border border-primary/20">
               <Building2 className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
               <p className="text-xs text-primary/80">
                 Exibindo apenas IFs com condições cadastradas para <strong>{produto}</strong>.
-                {(ifsAtivas ?? []).length === 0
-                  ? " Nenhuma IF ativa possui esse produto — cadastre condições na tela de IFs."
-                  : ` ${(ifsAtivas ?? []).length} IF${(ifsAtivas ?? []).length !== 1 ? "s" : ""} disponível${(ifsAtivas ?? []).length !== 1 ? "is" : ""}.`}
+                {(ifsAtivas ?? []).length === 0 ? (
+                  <> Nenhuma IF ativa possui esse produto —{" "}
+                    <Link href="/ifs" className="underline underline-offset-2 font-medium hover:text-primary transition-colors">
+                      cadastre condições na tela de IFs
+                    </Link>.
+                  </>
+                ) : (
+                  ` ${(ifsAtivas ?? []).length} IF${(ifsAtivas ?? []).length !== 1 ? "s" : ""} disponível${(ifsAtivas ?? []).length !== 1 ? "is" : ""}.`
+                )}
               </p>
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="sm:col-span-2">
-              <label className="text-xs text-muted-foreground mb-1 block">Instituição Financeira *</label>
-              <select
-                className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50"
-                value={novaIF.ifCadastroId || ""}
-                onChange={(e) => setNovaIF((p) => ({ ...p, ifCadastroId: Number(e.target.value) }))}
-              >
-                <option value="">
-                  {(ifsAtivas ?? []).length === 0 && produto
-                    ? "Nenhuma IF disponível para este produto"
-                    : "Selecione uma IF parceira..."}
-                </option>
-                {(ifsAtivas ?? []).map((if_) => (
-                  <option key={if_.id} value={if_.id}>{if_.nome}</option>
-                ))}
-              </select>
+
+          {/* Modo lote: lista de checkboxes com tags de taxa/prazo */}
+          {modoLote ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">{selecionadas.length} de {(ifsAtivas ?? []).length} selecionada{selecionadas.length !== 1 ? "s" : ""}</span>
+                <div className="flex gap-2">
+                  <button onClick={selecionarTodas} className="text-xs text-primary hover:underline">Selecionar todas</button>
+                  <span className="text-muted-foreground text-xs">·</span>
+                  <button onClick={limparSelecao} className="text-xs text-muted-foreground hover:text-foreground hover:underline">Limpar</button>
+                </div>
+              </div>
+              <div className="rounded-lg border border-border overflow-hidden divide-y divide-border/40">
+                {(ifsAtivas ?? []).map((if_) => {
+                  const checked = selecionadas.includes(if_.id);
+                  const taxa = (if_ as any).taxaMinima;
+                  const prazo = (if_ as any).prazoMaximo;
+                  return (
+                    <label
+                      key={if_.id}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors select-none",
+                        checked ? "bg-primary/8" : "hover:bg-muted/30"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelecionada(if_.id)}
+                        className="accent-primary w-3.5 h-3.5 flex-shrink-0"
+                      />
+                      <span className="flex-1 text-sm text-foreground">{if_.nome}</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {taxa && (
+                          <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
+                            a partir de {Number(taxa).toFixed(2)}% a.m.
+                          </span>
+                        )}
+                        {prazo && (
+                          <span className="text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded-full">
+                            até {prazo} meses
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
+          ) : (
+            /* Modo individual: select com tags de taxa/prazo abaixo */
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Instituição Financeira *</label>
+                <select
+                  className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50"
+                  value={novaIF.ifCadastroId || ""}
+                  onChange={(e) => setNovaIF((p) => ({ ...p, ifCadastroId: Number(e.target.value) }))}
+                >
+                  <option value="">
+                    {(ifsAtivas ?? []).length === 0 && produto
+                      ? "Nenhuma IF disponível para este produto"
+                      : "Selecione uma IF parceira..."}
+                  </option>
+                  {(ifsAtivas ?? []).map((if_) => (
+                    <option key={if_.id} value={if_.id}>{if_.nome}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Tags de taxa/prazo da IF selecionada */}
+              {novaIF.ifCadastroId > 0 && (() => {
+                const sel = (ifsAtivas ?? []).find((x) => x.id === novaIF.ifCadastroId);
+                const taxa = sel ? (sel as any).taxaMinima : null;
+                const prazo = sel ? (sel as any).prazoMaximo : null;
+                if (!taxa && !prazo) return null;
+                return (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {taxa && (
+                      <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        Taxa mín.: {Number(taxa).toFixed(2)}% a.m.
+                      </span>
+                    )}
+                    {prazo && (
+                      <span className="text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                        Prazo máx.: {prazo} meses
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Campos comuns: data, prazo, próxima ação */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Data de Envio</label>
               <input type="date" className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50" value={novaIF.dataEnvio} onChange={(e) => setNovaIF((p) => ({ ...p, dataEnvio: e.target.value }))} />
@@ -714,15 +851,31 @@ function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; 
               <input className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary/50" value={novaIF.proximaAcao} onChange={(e) => setNovaIF((p) => ({ ...p, proximaAcao: e.target.value }))} placeholder="Próximo passo..." />
             </div>
           </div>
+
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-accent transition-colors">Cancelar</button>
             <button
-              onClick={() => criarMutation.mutate({ operacaoId, ifCadastroId: novaIF.ifCadastroId, dataEnvio: novaIF.dataEnvio || undefined, prazoRetornoEstimado: novaIF.prazoRetornoEstimado || undefined, proximaAcao: novaIF.proximaAcao || undefined })}
-              disabled={!novaIF.ifCadastroId || criarMutation.isPending}
-              className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              onClick={() => { setShowForm(false); setModoLote(false); setSelecionadas([]); }}
+              className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-accent transition-colors"
             >
-              {criarMutation.isPending ? "Salvando..." : "Salvar e Registrar Distribuição"}
+              Cancelar
             </button>
+            {modoLote ? (
+              <button
+                onClick={enviarLote}
+                disabled={selecionadas.length === 0 || loteEnviando}
+                className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {loteEnviando ? "Enviando..." : `Distribuir para ${selecionadas.length} IF${selecionadas.length !== 1 ? "s" : ""}`}
+              </button>
+            ) : (
+              <button
+                onClick={() => criarMutation.mutate({ operacaoId, ifCadastroId: novaIF.ifCadastroId, dataEnvio: novaIF.dataEnvio || undefined, prazoRetornoEstimado: novaIF.prazoRetornoEstimado || undefined, proximaAcao: novaIF.proximaAcao || undefined })}
+                disabled={!novaIF.ifCadastroId || criarMutation.isPending}
+                className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {criarMutation.isPending ? "Salvando..." : "Salvar e Registrar Distribuição"}
+              </button>
+            )}
           </div>
         </div>
       )}
