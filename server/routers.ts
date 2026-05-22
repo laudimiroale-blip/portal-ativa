@@ -503,7 +503,16 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const user = ctx.user as any;
         const buffer = Buffer.from(input.fileBase64, "base64");
-        const key = `operacoes/${input.operacaoId}/docs/${Date.now()}-${input.fileName}`;
+        // Sanitize filename: remove accents, replace spaces with hyphens, keep only ASCII-safe chars
+        const sanitizeFileName = (name: string) =>
+          name
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // strip diacritics
+            .replace(/[^a-zA-Z0-9._-]/g, "-") // replace non-ASCII with hyphen
+            .replace(/-{2,}/g, "-") // collapse consecutive hyphens
+            .replace(/^-|-$/g, ""); // trim leading/trailing hyphens
+        const safeFileName = sanitizeFileName(input.fileName);
+        const key = `operacoes/${input.operacaoId}/docs/${Date.now()}-${safeFileName}`;
         const { url } = await storagePut(key, buffer, input.mimeType);
 
         if (input.documentoId) {
@@ -595,7 +604,15 @@ export const appRouter = router({
         .mutation(async ({ ctx, input }) => {
           const user = ctx.user as any;
           const buffer = Buffer.from(input.fileBase64, "base64");
-          const key = `operacoes/${input.operacaoId}/complementares/${Date.now()}-${input.fileName}`;
+          const sanitizeFileName = (name: string) =>
+            name
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-zA-Z0-9._-]/g, "-")
+              .replace(/-{2,}/g, "-")
+              .replace(/^-|-$/g, "");
+          const safeFileName = sanitizeFileName(input.fileName);
+          const key = `operacoes/${input.operacaoId}/complementares/${Date.now()}-${safeFileName}`;
           const { url } = await storagePut(key, buffer, input.mimeType);
           await createDocumentoComplementar({
             operacaoId: input.operacaoId,

@@ -4,7 +4,7 @@ import AtivaDashboardLayout from "@/components/AtivaDashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Archive, ArchiveRestore, Filter, FolderOpen, Plus, Search, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, Filter, FolderOpen, Play, Plus, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -257,7 +257,7 @@ export default function Operacoes() {
                   {operacoes?.map((op) => (
                     <tr key={op.id} className="hover:bg-accent/30 transition-colors cursor-pointer group">
                       <td className="px-4 py-3">
-                        <Link href={`/operacoes/${op.id}`} className="flex items-center gap-2">
+                        <Link href={op.statusRascunho ? `/operacoes/${op.id}/continuar` : `/operacoes/${op.id}`} className="flex items-center gap-2">
                             <span className="font-mono text-xs text-primary">{op.codigoOperacao}</span>
                             {op.statusRascunho && <RascunhoBadge />}
                         </Link>
@@ -294,6 +294,18 @@ export default function Operacoes() {
                           {formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR, addSuffix: true })}
                         </span>
                       </td>
+                      {op.statusRascunho && (
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/operacoes/${op.id}/continuar`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-primary border border-primary/30 bg-primary/10 hover:bg-primary/20 transition-colors"
+                          >
+                            <Play className="w-3 h-3" />
+                            Continuar
+                          </Link>
+                        </td>
+                      )}
                       {isAdmin && (
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

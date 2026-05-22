@@ -64,12 +64,51 @@ interface ArquivoLocal {
   erro?: string;
 }
 
-export default function NovaOperacao() {
+interface NovaOperacaoProps {
+  params?: { id?: string };
+}
+
+export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
+  const operacaoIdFromUrl = params?.id ? Number(params.id) : null;
   const [etapa, setEtapa] = useState<Etapa>(1);
-  const [operacaoId, setOperacaoId] = useState<number | null>(null);
+  const [operacaoId, setOperacaoId] = useState<number | null>(operacaoIdFromUrl);
   const [codigoOperacao, setCodigoOperacao] = useState<string>("");
   const [dadosCliente, setDadosCliente] = useState<Partial<DadosCliente>>({});
   const [dadosOperacao, setDadosOperacao] = useState<Partial<DadosOperacao>>({});
+  const [retomadaCarregada, setRetomadaCarregada] = useState(false);
+
+  // Load existing operation when resuming from URL
+  const { data: operacaoExistente } = trpc.operacoes.obter.useQuery(
+    { id: operacaoIdFromUrl! },
+    { enabled: !!operacaoIdFromUrl && !retomadaCarregada }
+  );
+
+  // Once loaded, jump to the saved step
+  React.useEffect(() => {
+    if (operacaoExistente && !retomadaCarregada) {
+      setRetomadaCarregada(true);
+      setCodigoOperacao(operacaoExistente.codigoOperacao ?? "");
+      setDadosCliente({
+        nomeCliente: operacaoExistente.nomeCliente ?? "",
+        telefoneTomador: operacaoExistente.telefoneTomador ?? "",
+        emailTomador: operacaoExistente.emailTomador ?? "",
+      });
+      setDadosOperacao({
+        produto: (operacaoExistente.produto as DadosOperacao["produto"]) ?? "Home Equity",
+        valorSolicitado: String(operacaoExistente.valorSolicitado ?? ""),
+        valorGarantia: String(operacaoExistente.valorGarantia ?? ""),
+        tipoGarantiaDescricao: operacaoExistente.tipoGarantiaDescricao ?? "",
+        prazo: operacaoExistente.prazo ?? 60,
+        finalidade: operacaoExistente.finalidade ?? "",
+        contextoOperacao: operacaoExistente.contextoOperacao ?? "",
+        responsavelOperacionalId: operacaoExistente.responsavelOperacionalId ?? undefined,
+      });
+      // Jump to the saved step (clamp to valid range 1-5)
+      const savedEtapa = operacaoExistente.etapaAtual ?? 1;
+      const etapaValida = Math.max(1, Math.min(5, savedEtapa)) as Etapa;
+      setEtapa(etapaValida);
+    }
+  }, [operacaoExistente, retomadaCarregada]);
 
   const etapas = [
     { id: 1, label: "Dados do Cliente", icon: User },
@@ -583,8 +622,11 @@ function Etapa3Documentos({
   const [previewIndex, setPreviewIndex] = useState(0);
 
   const abrirPreview = (url: string, nome: string, index?: number) => {
-    const ext = nome.toLowerCase().split(".").pop() ?? "";
-    const tipo = ["pdf"].includes(ext) ? "pdf" : ["jpg", "jpeg", "png", "webp", "heic"].includes(ext) ? "imagem" : "outro";
+    // Determine extension from filename first, then fall back to URL path
+    const extFromNome = nome.toLowerCase().split(".").pop() ?? "";
+    const extFromUrl = url.toLowerCase().split("?")[0].split(".").pop() ?? "";
+    const ext = extFromNome.length > 1 && extFromNome !== nome.toLowerCase() ? extFromNome : extFromUrl;
+    const tipo = ext === "pdf" ? "pdf" : ["jpg", "jpeg", "png", "webp", "heic"].includes(ext) ? "imagem" : "outro";
     setPreviewArquivo({ url, nome, tipo });
     setZoomPreview(1);
     setPreviewIndex(index ?? 0);
@@ -912,11 +954,19 @@ function Etapa3Documentos({
           </DialogHeader>
           <div className="flex-1 overflow-auto flex items-start justify-center bg-black/20 p-2">
             {previewArquivo?.tipo === "pdf" && (
-              <iframe
-                src={previewArquivo.url + "#toolbar=1&navpanes=0"}
-                className="w-full h-full rounded border-0"
-                title={previewArquivo.nome}
-              />
+              <div className="w-full h-full flex flex-col">
+                <iframe
+                  src={previewArquivo.url + "#toolbar=1&navpanes=0&scrollbar=1"}
+                  className="w-full flex-1 rounded border-0 min-h-[500px]"
+                  title={previewArquivo.nome}
+                  style={{ minHeight: "calc(90vh - 80px)" }}
+                />
+                <div className="flex justify-center py-2 gap-2">
+                  <a href={previewArquivo.url} target="_blank" rel="noreferrer">
+                    <button className="text-xs text-muted-foreground hover:text-foreground underline">Abrir em nova aba</button>
+                  </a>
+                </div>
+              </div>
             )}
             {previewArquivo?.tipo === "imagem" && (
               <img

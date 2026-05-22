@@ -21,6 +21,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/operacoes" component={Operacoes} />
       <Route path="/operacoes/nova" component={NovaOperacao} />
+      <Route path="/operacoes/:id/continuar" component={NovaOperacao} />
       <Route path="/operacoes/:id" component={DetalheOperacao} />
       <Route path="/fila" component={FilaOperacional} />
       <Route path="/ifs" component={GestaoIFs} />

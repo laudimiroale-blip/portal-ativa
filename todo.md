@@ -248,18 +248,23 @@
 ## Melhorias de Convite e Arquivamento
 
 ### Página de Ativação de Conta (/convite)
-- [ ] Procedure `usuarios.ativarConvite` — valida token, define nome/senha via OAuth e ativa o usuário
-- [ ] Página `/convite` com formulário de ativação (nome, senha, confirmação)
-- [ ] Rota pública em App.tsx para `/convite`
-- [ ] Ao ativar, atualizar `conviteStatus` para "Ativo" e `ativo` para true
-- [ ] Redirecionar para login após ativação bem-sucedida
+- [x] Procedure `usuarios.ativarConvite` — valida token, define nome/senha via OAuth e ativa o usuário
+- [x] Página `/convite` com formulário de ativação (nome, senha, confirmação)
+- [x] Rota pública em App.tsx para `/convite`
+- [x] Ao ativar, atualizar `conviteStatus` para "Ativo" e `ativo` para true
+- [x] Redirecionar para login após ativação bem-sucedida
 
 ### Desarquivar Operações
-- [ ] Procedure `operacoes.desarquivar` (admin only) — muda statusMacro de "Arquivada" para "Pré-cadastro"
-- [ ] Botão "Desarquivar" visível apenas em operações com statusMacro === "Arquivada"
-- [ ] Botão na listagem (ao passar o mouse) e no detalhe da operação
+- [x] Procedure `operacoes.desarquivar` (admin only) — muda statusMacro de "Arquivada" para "Pré-cadastro"
+- [x] Botão "Desarquivar" visível apenas em operações com statusMacro === "Arquivada"
+- [x] Botão na listagem (ao passar o mouse) e no detalhe da operação
 
 ### Ações de Convite na Listagem de Usuários
-- [ ] Procedure `usuarios.revogarConvite` (admin only) — deleta o usuário com status "Convidado"
-- [ ] Botão "Copiar Link" para usuários com conviteStatus === "Convidado"
-- [ ] Botão "Revogar" para usuários com conviteStatus === "Convidado" com confirmação
+- [x] Procedure `usuarios.revogarConvite` (admin only) — deleta o usuário com status "Convidado"
+- [x] Botão "Copiar Link" para usuários com conviteStatus === "Convidado"
+- [x] Botão "Revogar" para usuários com conviteStatus === "Convidado" com confirmação
+
+## Correção de Bugs (3 bugs encontrados nos testes)
+- [x] Bug 1: Sanitizar nome do arquivo antes do upload (remover acentos, cedilha, espaços → ASCII)
+- [x] Bug 2: Visualização inline de PDF (iframe) e imagem (img) no modal de preview
+- [x] Bug 3: Retomada de operação na última etapa com progresso salvo ao reabrir wizard
