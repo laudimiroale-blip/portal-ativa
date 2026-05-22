@@ -22,6 +22,8 @@ export const users = mysqlTable("users", {
   perfil: mysqlEnum("perfil", ["admin", "operacional", "assessor"]).default("assessor").notNull(),
   numeroWhatsapp: varchar("numeroWhatsapp", { length: 20 }),
   ativo: boolean("ativo").default(true).notNull(),
+  conviteToken: varchar("conviteToken", { length: 64 }),
+  conviteStatus: mysqlEnum("conviteStatus", ["Ativo", "Convidado", "Expirado"]).default("Ativo").notNull(),
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -84,6 +86,7 @@ export const operacoes = mysqlTable("operacoes", {
     "Reprovada",
     "Cancelada",
     "Stand-by",
+    "Arquivada",
   ])
     .default("Pré-cadastro")
     .notNull(),

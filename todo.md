@@ -225,3 +225,22 @@
 - [x] Ao clicar em "Gerar Defesa" na Etapa 4, enviar automaticamente para a IA: dados das etapas 1-2, relato do consultor, perfilamento do tomador, leitura patrimonial/financeira, dados da garantia, pendências e alertas
 - [x] Atualizar prompt da IA de Defesa Comercial para usar o JSON estruturado como contexto rico
 - [x] Garantir que a IA nunca invente informações — apenas use dados comprovados
+
+## Arquivar/Excluir Operações + Convidar Usuários
+
+### Fase 1 — Arquivar e Excluir Operações (apenas Admin)
+- [ ] Adicionar status "Arquivada" ao enum statusMacro no schema
+- [ ] Procedure `operacoes.arquivar` (admin only) — muda statusMacro para "Arquivada"
+- [ ] Procedure `operacoes.excluir` (admin only) — hard delete com validação do código ATV
+- [ ] Filtro na listagem: por padrão ocultar "Arquivada"; toggle para exibir arquivadas
+- [ ] Botão "Arquivar" na listagem de Operações (apenas admin)
+- [ ] Botão "Arquivar" no detalhe da operação (apenas admin)
+- [ ] Botão "Excluir" na listagem com modal de confirmação + digitar código ATV
+- [ ] Botão "Excluir" no detalhe com modal de confirmação + digitar código ATV
+
+### Fase 2 — Convidar Novos Usuários (apenas Admin)
+- [ ] Procedure `usuarios.convidar` (admin only) — cria registro com status "Convidado" e gera link de convite
+- [ ] Botão "+ Novo Usuário" na tela de Gestão de Usuários
+- [ ] Modal com campos: Nome, E-mail, Perfil (Admin/Operacional/Assessor)
+- [ ] Exibir usuários com status "Convidado" na listagem com badge visual
+- [ ] Exibir link de convite para o admin copiar e enviar manualmente

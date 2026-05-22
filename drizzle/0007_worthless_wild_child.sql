@@ -1,0 +1,3 @@
+ALTER TABLE `operacoes` MODIFY COLUMN `statusMacro` enum('Pré-cadastro','Aguardando documentos','Documentação parcial','Documentos ilegíveis','Aguardando SCR','Documentação completa','Em análise IA','Em validação humana','Pronta para distribuição','Em distribuição','Distribuída','Em retorno bancário','Aguardando cliente','Aprovada','Reprovada','Cancelada','Stand-by','Arquivada') NOT NULL DEFAULT 'Pré-cadastro';--> statement-breakpoint
+ALTER TABLE `users` ADD `conviteToken` varchar(64);--> statement-breakpoint
+ALTER TABLE `users` ADD `conviteStatus` enum('Ativo','Convidado','Expirado') DEFAULT 'Ativo' NOT NULL;

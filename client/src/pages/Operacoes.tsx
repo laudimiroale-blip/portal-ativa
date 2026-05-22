@@ -4,14 +4,15 @@ import AtivaDashboardLayout from "@/components/AtivaDashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Filter, FolderOpen, Plus, Search, X } from "lucide-react";
+import { Archive, Filter, FolderOpen, Plus, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 
 const STATUS_OPTIONS = [
   "Pré-cadastro", "Aguardando documentos", "Documentação parcial", "Documentos ilegíveis", "Aguardando SCR",
   "Documentação completa", "Em análise IA", "Em validação humana", "Pronta para distribuição", "Em distribuição",
-  "Distribuída", "Em retorno bancário", "Aguardando cliente", "Aprovada", "Reprovada", "Cancelada", "Stand-by",
+  "Distribuída", "Em retorno bancário", "Aguardando cliente", "Aprovada", "Reprovada", "Cancelada", "Stand-by", "Arquivada",
 ];
 
 const PRODUTO_OPTIONS = ["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"];
@@ -27,14 +28,48 @@ export default function Operacoes() {
   const [prioridadeFiltro, setPrioridadeFiltro] = useState("");
   const [apenasMinhas, setApenasMinhas] = useState(!isAdmin);
   const [showFilters, setShowFilters] = useState(false);
+  const [mostrarArquivadas, setMostrarArquivadas] = useState(false);
 
-  const { data: operacoes, isLoading } = trpc.operacoes.listar.useQuery({
+  // Modais de ação admin
+  const [modalArquivar, setModalArquivar] = useState<{ id: number; codigo: string } | null>(null);
+  const [modalExcluir, setModalExcluir] = useState<{ id: number; codigo: string } | null>(null);
+  const [codigoConfirmacao, setCodigoConfirmacao] = useState("");
+
+  const utils = trpc.useUtils();
+
+  const arquivarMutation = trpc.operacoes.arquivar.useMutation({
+    onSuccess: () => {
+      toast.success("Operação arquivada com sucesso.");
+      setModalArquivar(null);
+      utils.operacoes.listar.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const excluirMutation = trpc.operacoes.excluir.useMutation({
+    onSuccess: () => {
+      toast.success("Operação excluída permanentemente.");
+      setModalExcluir(null);
+      setCodigoConfirmacao("");
+      utils.operacoes.listar.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const { data: operacoesRaw, isLoading } = trpc.operacoes.listar.useQuery({
     busca: busca || undefined,
     statusMacro: statusFiltro || undefined,
     produto: produtoFiltro || undefined,
     prioridade: prioridadeFiltro || undefined,
     apenasMinhas: !isAdmin ? true : apenasMinhas,
   });
+
+  // Filtrar arquivadas: por padrão ocultar, a menos que filtro explícito ou toggle ativo
+  const operacoes = useMemo(() => {
+    if (!operacoesRaw) return [];
+    if (mostrarArquivadas || statusFiltro === "Arquivada") return operacoesRaw;
+    return operacoesRaw.filter((op: any) => op.statusMacro !== "Arquivada");
+  }, [operacoesRaw, mostrarArquivadas, statusFiltro]);
 
   const hasFilters = !!(busca || statusFiltro || produtoFiltro || prioridadeFiltro);
 
@@ -143,15 +178,27 @@ export default function Operacoes() {
               </div>
             </div>
             {isAdmin && (
-              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={apenasMinhas}
-                  onChange={(e) => setApenasMinhas(e.target.checked)}
-                  className="rounded border-border"
-                />
-                Apenas minhas operações
-              </label>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={apenasMinhas}
+                    onChange={(e) => setApenasMinhas(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  Apenas minhas operações
+                </label>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mostrarArquivadas}
+                    onChange={(e) => setMostrarArquivadas(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  <Archive className="w-3.5 h-3.5" />
+                  Exibir arquivadas
+                </label>
+              </div>
             )}
             {hasFilters && (
               <button onClick={clearFilters} className="text-xs text-primary hover:underline flex items-center gap-1">
@@ -193,6 +240,7 @@ export default function Operacoes() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Prioridade</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden xl:table-cell">Responsável</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden 2xl:table-cell">Última mov.</th>
+                    {isAdmin && <th className="px-4 py-3 w-20" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
@@ -236,6 +284,28 @@ export default function Operacoes() {
                           {formatDistanceToNow(new Date(op.ultimaMovimentacaoEm), { locale: ptBR, addSuffix: true })}
                         </span>
                       </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {op.statusMacro !== "Arquivada" && (
+                              <button
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setModalArquivar({ id: op.id, codigo: op.codigoOperacao }); }}
+                                className="p-1.5 rounded-md text-muted-foreground hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                                title="Arquivar"
+                              >
+                                <Archive className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setModalExcluir({ id: op.id, codigo: op.codigoOperacao }); setCodigoConfirmacao(""); }}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              title="Excluir permanentemente"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -244,6 +314,88 @@ export default function Operacoes() {
           )}
         </div>
       </div>
+
+      {/* Modal Arquivar */}
+      {modalArquivar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Archive className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Arquivar Operação</h3>
+                <p className="text-xs text-muted-foreground">{modalArquivar.codigo}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              A operação será movida para o status <strong className="text-foreground">Arquivada</strong> e ocultada da listagem padrão. Você pode visualizá-la ativando o filtro "Exibir arquivadas".
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setModalArquivar(null)}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => arquivarMutation.mutate({ id: modalArquivar.id })}
+                disabled={arquivarMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+              >
+                {arquivarMutation.isPending ? "Arquivando..." : "Arquivar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Excluir */}
+      {modalExcluir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Excluir Permanentemente</h3>
+                <p className="text-xs text-muted-foreground">{modalExcluir.codigo}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Esta ação é <strong className="text-destructive">irreversível</strong>. Todos os documentos, análises e histórico serão removidos permanentemente.
+            </p>
+            <div className="mb-4">
+              <label className="text-xs text-muted-foreground mb-1.5 block">
+                Digite o código ATV para confirmar: <strong className="text-foreground">{modalExcluir.codigo}</strong>
+              </label>
+              <input
+                type="text"
+                value={codigoConfirmacao}
+                onChange={(e) => setCodigoConfirmacao(e.target.value)}
+                placeholder={modalExcluir.codigo}
+                className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-destructive/50"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setModalExcluir(null); setCodigoConfirmacao(""); }}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => excluirMutation.mutate({ id: modalExcluir.id, codigoConfirmacao })}
+                disabled={excluirMutation.isPending || codigoConfirmacao.trim().toUpperCase() !== modalExcluir.codigo.trim().toUpperCase()}
+                className="px-4 py-2 rounded-lg text-sm bg-destructive/20 text-destructive border border-destructive/30 hover:bg-destructive/30 transition-colors disabled:opacity-40"
+              >
+                {excluirMutation.isPending ? "Excluindo..." : "Excluir Permanentemente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AtivaDashboardLayout>
   );
 }

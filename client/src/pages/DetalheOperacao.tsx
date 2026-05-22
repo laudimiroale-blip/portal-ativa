@@ -7,6 +7,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   AlertTriangle,
+  Archive,
   ArrowLeft,
   Bot,
   Building2,
@@ -19,6 +20,7 @@ import {
   Plus,
   RefreshCw,
   Shield,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -37,6 +39,30 @@ export default function DetalheOperacao({ params }: Props) {
   const isAdmin = (user as any)?.perfil === "admin";
   const operacaoId = Number(params.id);
   const [activeTab, setActiveTab] = useState<Tab>("documentos");
+
+  // Modais admin
+  const [modalArquivar, setModalArquivar] = useState(false);
+  const [modalExcluir, setModalExcluir] = useState(false);
+  const [codigoConfirmacao, setCodigoConfirmacao] = useState("");
+  const utils = trpc.useUtils();
+  const [, navigate] = (useState("") as any);
+
+  const arquivarMutation = trpc.operacoes.arquivar.useMutation({
+    onSuccess: () => {
+      toast.success("Operação arquivada.");
+      setModalArquivar(false);
+      utils.operacoes.obter.invalidate({ id: operacaoId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const excluirMutation = trpc.operacoes.excluir.useMutation({
+    onSuccess: () => {
+      toast.success("Operação excluída permanentemente.");
+      window.location.href = "/operacoes";
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const { data: operacao, isLoading, refetch } = trpc.operacoes.obter.useQuery({ id: operacaoId });
 
@@ -95,12 +121,34 @@ export default function DetalheOperacao({ params }: Props) {
               </div>
             </div>
           </div>
-          <button
-            onClick={() => refetch()}
-            className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && operacao && operacao.statusMacro !== "Arquivada" && (
+              <button
+                onClick={() => setModalArquivar(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-amber-500/30 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 transition-colors"
+                title="Arquivar operação"
+              >
+                <Archive className="w-3.5 h-3.5" />
+                Arquivar
+              </button>
+            )}
+            {isAdmin && operacao && (
+              <button
+                onClick={() => { setModalExcluir(true); setCodigoConfirmacao(""); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-destructive/30 text-destructive bg-destructive/10 hover:bg-destructive/20 transition-colors"
+                title="Excluir permanentemente"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Excluir
+              </button>
+            )}
+            <button
+              onClick={() => refetch()}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -139,6 +187,88 @@ export default function DetalheOperacao({ params }: Props) {
           {activeTab === "historico" && <TabHistorico operacaoId={operacaoId} />}
         </div>
       </div>
+
+      {/* Modal Arquivar */}
+      {modalArquivar && operacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Archive className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Arquivar Operação</h3>
+                <p className="text-xs text-muted-foreground">{operacao.codigoOperacao}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              A operação será movida para o status <strong className="text-foreground">Arquivada</strong> e ocultada da listagem padrão. Você pode visualizá-la ativando o filtro "Exibir arquivadas".
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setModalArquivar(false)}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => arquivarMutation.mutate({ id: operacaoId })}
+                disabled={arquivarMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+              >
+                {arquivarMutation.isPending ? "Arquivando..." : "Arquivar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Excluir */}
+      {modalExcluir && operacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Excluir Permanentemente</h3>
+                <p className="text-xs text-muted-foreground">{operacao.codigoOperacao}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Esta ação é <strong className="text-destructive">irreversível</strong>. Todos os documentos, análises e histórico serão removidos permanentemente.
+            </p>
+            <div className="mb-4">
+              <label className="text-xs text-muted-foreground mb-1.5 block">
+                Digite o código ATV para confirmar: <strong className="text-foreground">{operacao.codigoOperacao}</strong>
+              </label>
+              <input
+                type="text"
+                value={codigoConfirmacao}
+                onChange={(e) => setCodigoConfirmacao(e.target.value)}
+                placeholder={operacao.codigoOperacao}
+                className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-destructive/50"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setModalExcluir(false); setCodigoConfirmacao(""); }}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => excluirMutation.mutate({ id: operacaoId, codigoConfirmacao })}
+                disabled={excluirMutation.isPending || codigoConfirmacao.trim().toUpperCase() !== operacao.codigoOperacao.trim().toUpperCase()}
+                className="px-4 py-2 rounded-lg text-sm bg-destructive/20 text-destructive border border-destructive/30 hover:bg-destructive/30 transition-colors disabled:opacity-40"
+              >
+                {excluirMutation.isPending ? "Excluindo..." : "Excluir Permanentemente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AtivaDashboardLayout>
   );
 }

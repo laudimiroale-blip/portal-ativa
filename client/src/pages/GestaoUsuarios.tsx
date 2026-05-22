@@ -10,10 +10,14 @@ import { trpc } from "@/lib/trpc";
 import AtivaDashboardLayout from "@/components/AtivaDashboardLayout";
 import {
   AlertTriangle,
+  Check,
+  Copy,
+  Plus,
   Search,
   Shield,
   Trash2,
   UserCheck,
+  UserPlus,
   UserX,
   Users,
 } from "lucide-react";
@@ -55,6 +59,47 @@ export default function GestaoUsuarios() {
   const [confirmModal, setConfirmModal] = useState<{ userId: number; nome: string; novoPerfil: string } | null>(null);
   const [confirmDeletar, setConfirmDeletar] = useState<{ userId: number; nome: string } | null>(null);
 
+  // Modal de convite
+  const [modalConvite, setModalConvite] = useState(false);
+  const [conviteNome, setConviteNome] = useState("");
+  const [conviteEmail, setConviteEmail] = useState("");
+  const [convitePerfil, setConvitePerfil] = useState<"admin" | "operacional" | "assessor">("assessor");
+  const [linkConvite, setLinkConvite] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+
+  const convidar = trpc.usuarios.convidar.useMutation({
+    onSuccess: (data) => {
+      refetch();
+      const link = `${window.location.origin}/convite?token=${data.token}`;
+      setLinkConvite(link);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleConvidar = () => {
+    if (!conviteNome.trim() || !conviteEmail.trim()) {
+      toast.error("Preencha nome e e-mail.");
+      return;
+    }
+    convidar.mutate({ nome: conviteNome.trim(), email: conviteEmail.trim(), perfil: convitePerfil });
+  };
+
+  const copiarLink = () => {
+    if (!linkConvite) return;
+    navigator.clipboard.writeText(linkConvite);
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2000);
+  };
+
+  const fecharModalConvite = () => {
+    setModalConvite(false);
+    setConviteNome("");
+    setConviteEmail("");
+    setConvitePerfil("assessor");
+    setLinkConvite(null);
+    setCopiado(false);
+  };
+
   if (!isAdmin) {
     return (
       <AtivaDashboardLayout>
@@ -92,6 +137,13 @@ export default function GestaoUsuarios() {
             <h1 className="text-2xl font-bold text-[#FAFAFA]">Gestão de Usuários</h1>
             <p className="text-sm text-[#888] mt-1">Gerencie os acessos e perfis da equipe</p>
           </div>
+          <button
+            onClick={() => setModalConvite(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#C9A84C]/20 text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-sm font-medium hover:bg-[#C9A84C]/30 transition-colors"
+          >
+            <UserPlus className="w-4 h-4" />
+            Novo Usuário
+          </button>
         </div>
 
         {/* Métricas */}
@@ -198,9 +250,15 @@ export default function GestaoUsuarios() {
 
                       {/* Status */}
                       <div className="col-span-2">
-                        <Badge className={`text-xs border ${u.ativo ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}>
-                          {u.ativo ? "Ativo" : "Inativo"}
-                        </Badge>
+                        {(u as any).conviteStatus === "Convidado" ? (
+                          <Badge className="text-xs border bg-amber-500/20 text-amber-400 border-amber-500/30">
+                            Convidado
+                          </Badge>
+                        ) : (
+                          <Badge className={`text-xs border ${u.ativo ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-red-500/20 text-red-400 border-red-500/30"}`}>
+                            {u.ativo ? "Ativo" : "Inativo"}
+                          </Badge>
+                        )}
                       </div>
 
                       {/* Data */}
@@ -294,6 +352,114 @@ export default function GestaoUsuarios() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Novo Usuário / Convite */}
+      {modalConvite && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#111] border border-[#C9A84C]/30 rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            {!linkConvite ? (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-full bg-[#C9A84C]/20 flex items-center justify-center">
+                    <UserPlus className="w-5 h-5 text-[#C9A84C]" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-[#FAFAFA]">Convidar Novo Usuário</h3>
+                    <p className="text-xs text-[#888]">Um link de acesso será gerado para o usuário</p>
+                  </div>
+                </div>
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className="text-xs text-[#888] mb-1 block">Nome completo</label>
+                    <input
+                      type="text"
+                      value={conviteNome}
+                      onChange={(e) => setConviteNome(e.target.value)}
+                      placeholder="Ex: João Silva"
+                      className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#333] rounded-md text-sm text-[#FAFAFA] placeholder:text-[#555] focus:outline-none focus:border-[#C9A84C]/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#888] mb-1 block">E-mail</label>
+                    <input
+                      type="email"
+                      value={conviteEmail}
+                      onChange={(e) => setConviteEmail(e.target.value)}
+                      placeholder="Ex: joao@empresa.com"
+                      className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#333] rounded-md text-sm text-[#FAFAFA] placeholder:text-[#555] focus:outline-none focus:border-[#C9A84C]/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#888] mb-1 block">Perfil de acesso</label>
+                    <select
+                      value={convitePerfil}
+                      onChange={(e) => setConvitePerfil(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#333] rounded-md text-sm text-[#FAFAFA] focus:outline-none focus:border-[#C9A84C]/50"
+                    >
+                      <option value="assessor">Assessor</option>
+                      <option value="operacional">Operacional</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={fecharModalConvite}
+                    className="px-4 py-2 rounded-lg text-sm border border-[#333] text-[#888] hover:text-[#FAFAFA] transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConvidar}
+                    disabled={convidar.isPending}
+                    className="px-4 py-2 rounded-lg text-sm bg-[#C9A84C]/20 text-[#C9A84C] border border-[#C9A84C]/30 hover:bg-[#C9A84C]/30 transition-colors disabled:opacity-50"
+                  >
+                    {convidar.isPending ? "Gerando convite..." : "Gerar Convite"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <Check className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-[#FAFAFA]">Convite Gerado!</h3>
+                    <p className="text-xs text-[#888]">Compartilhe o link abaixo com o usuário</p>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label className="text-xs text-[#888] mb-1.5 block">Link de acesso</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={linkConvite}
+                      readOnly
+                      className="flex-1 px-3 py-2 bg-[#0a0a0a] border border-[#333] rounded-md text-xs text-[#888] font-mono focus:outline-none"
+                    />
+                    <button
+                      onClick={copiarLink}
+                      className={`p-2 rounded-md border transition-colors ${copiado ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-[#0a0a0a] text-[#888] border-[#333] hover:text-[#FAFAFA]"}`}
+                    >
+                      {copiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#555] mt-1.5">O usuário aparecerá com status <strong className="text-amber-400">Convidado</strong> até acessar o portal.</p>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={fecharModalConvite}
+                    className="px-4 py-2 rounded-lg text-sm bg-[#C9A84C]/20 text-[#C9A84C] border border-[#C9A84C]/30 hover:bg-[#C9A84C]/30 transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </AtivaDashboardLayout>
   );
 }

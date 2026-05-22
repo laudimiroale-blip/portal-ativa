@@ -50,6 +50,13 @@
       "when": 1779330439867,
       "tag": "0006_mighty_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1779491415748,
+      "tag": "0007_worthless_wild_child",
+      "breakpoints": true
     }
   ]
 }

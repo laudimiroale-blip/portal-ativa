@@ -123,6 +123,40 @@ export const appRouter = router({
         await softDeleteUsuario(input.userId);
         return { success: true };
       }),
+
+    convidar: adminProcedure
+      .input(z.object({
+        nome: z.string().min(2),
+        email: z.string().email(),
+        perfil: z.enum(["admin", "operacional", "assessor"]),
+      }))
+      .mutation(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
+        // Verificar se já existe usuário com esse e-mail
+        const existente = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+        if (existente.length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: "Já existe um usuário com este e-mail." });
+        }
+        // Gerar token de convite único
+        const token = nanoid(32);
+        // Criar usuário com status Convidado (openId temporário até o primeiro login)
+        await db.insert(users).values({
+          openId: `convite_${token}`,
+          name: input.nome,
+          email: input.email,
+          perfil: input.perfil,
+          role: input.perfil === "admin" ? "admin" : "user",
+          conviteToken: token,
+          conviteStatus: "Convidado",
+          ativo: false, // inativo até aceitar o convite
+          lastSignedIn: new Date(),
+        });
+        return { success: true, token };
+      }),
   }),
 
   // ─── Operações ─────────────────────────────────────────────────────────────
@@ -336,11 +370,33 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    excluir: adminProcedure
+    arquivar: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        const op = await getOperacaoById(input.id);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        await updateOperacao(input.id, { statusMacro: "Arquivada" });
+        await addHistoricoStatus({
+          operacaoId: input.id,
+          statusAnterior: op.statusMacro,
+          statusNovo: "Arquivada",
+          alteradoPor: (ctx.user as any).id,
+        });
+        await addLog({ evento: "operacao_arquivada", detalhe: { id: input.id }, usuarioId: (ctx.user as any).id, operacaoId: input.id });
+        return { success: true };
+      }),
+
+    excluir: adminProcedure
+      .input(z.object({ id: z.number(), codigoConfirmacao: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const op = await getOperacaoById(input.id);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        // Valida que o admin digitou o código ATV correto
+        if (input.codigoConfirmacao.trim().toUpperCase() !== op.codigoOperacao.trim().toUpperCase()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Código ATV incorreto. Digite exatamente o código da operação para confirmar." });
+        }
         await softDeleteOperacao(input.id);
-        await addLog({ evento: "operacao_excluida", detalhe: { id: input.id }, usuarioId: (ctx.user as any).id, operacaoId: input.id });
+        await addLog({ evento: "operacao_excluida", detalhe: { id: input.id, codigo: op.codigoOperacao }, usuarioId: (ctx.user as any).id, operacaoId: input.id });
         return { success: true };
       }),
 
