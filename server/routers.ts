@@ -1086,8 +1086,9 @@ Responda em JSON com este formato exato:
 
         const systemPrompt = `Você é um Analista Documental Sênior da Ativa Soluções, especializado em crédito com garantia real (Home Equity, Auto Equity, Rural Equity, Imóvel em Construção).
 
-SUA MISSÃO: Realizar pré-análise documental completa e rigorosa de cada documento enviado.
+SUA MISSÃO: Realizar pré-análise documental completa, extrair dados estruturados e gerar inteligência operacional para alimentar a Defesa Comercial.
 
+=== CAMADA 1: ANÁLISE DOCUMENTAL ===
 PARA CADA DOCUMENTO ANALISE:
 1. Tipo e correspondência: o documento é realmente o que se declara ser?
 2. Legibilidade: está legível, sem cortes, sem partes ilegíveis?
@@ -1101,12 +1102,29 @@ SEMÁFORO:
 - amarelo: presente mas com ressalva (data próxima do vencimento, qualidade reduzida, dado não confirmado)
 - vermelho: ausente, vencido, ilegível, incorreto ou inconsistente
 
-ALÉM DA ANÁLISE, EXTRAIA AUTOMATICAMENTE:
-- Do RG/CNH: nome_completo, cpf, rg, data_nascimento, estado_civil
-- Do comprovante de renda: renda_mensal_estimada, profissao
-- Da matrícula/IPTU: matricula_imovel, endereco_imovel, metragem, cidade_imovel, uf_imovel, titularidade, onus
-- Do extrato bancário: saldo_medio_estimado, banco
-- Do IRPF: renda_declarada
+=== CAMADA 2: PERFILAMENTO DO TOMADOR ===
+Extraia automaticamente dos documentos:
+- Identificação: nome_completo, cpf, rg, data_nascimento, estado_civil
+- Contato: telefone, email, endereco_residencial
+- Profissional: profissao, empresa, participacao_societaria
+- Financeiro: renda_mensal_estimada, faturamento_mensal, saldo_medio_estimado, movimentacao_financeira, banco
+- Patrimonial: patrimonio_aparente
+- Fiscal: renda_declarada (IRPF)
+
+=== CAMADA 3: PERFILAMENTO DA GARANTIA ===
+IMOVEL URBANO: matricula_imovel, cartorio, iptu, inscricao_cadastral, area_total, area_construida, descricao_imovel, padrao_construtivo, averbacao, onus, alienacao, hipoteca, penhora, inventario, liquidez_aparente, endereco_imovel, cidade_imovel, uf_imovel, titularidade
+IMOVEL RURAL: hectares, car, ccir, itr, georreferenciamento, atividade_explorada, benfeitorias, logistica, produtividade_aparente
+VEICULO: marca, modelo, ano_veiculo, placa, renavam, alienacao_veiculo, debitos_veiculo
+
+=== CAMADA 4: LEITURA OPERACIONAL ===
+Gere uma avaliação estruturada contendo:
+- perfil_patrimonial: descrição do patrimônio identificado
+- perfil_financeiro: capacidade financeira aparente
+- grau_organizacao_documental: "alto" | "médio" | "baixo"
+- complexidade_operacao: "simples" | "média" | "complexa"
+- mitigadores_risco: lista de pontos positivos identificados
+- fragilidades: lista de pontos de atenção (sem inventar)
+- aderencia_bancaria_aparente: "alta" | "média" | "baixa"
 
 RETORNE JSON ESTRITAMENTE NESTE FORMATO:
 {
@@ -1133,17 +1151,63 @@ RETORNE JSON ESTRITAMENTE NESTE FORMATO:
     "rg": string | null,
     "data_nascimento": string | null,
     "estado_civil": string | null,
+    "telefone": string | null,
+    "email": string | null,
+    "endereco_residencial": string | null,
     "profissao": string | null,
+    "empresa": string | null,
+    "participacao_societaria": string | null,
     "renda_mensal_estimada": string | null,
+    "faturamento_mensal": string | null,
+    "saldo_medio_estimado": string | null,
+    "movimentacao_financeira": string | null,
+    "banco": string | null,
+    "renda_declarada": string | null,
+    "patrimonio_aparente": string | null,
     "matricula_imovel": string | null,
+    "cartorio": string | null,
+    "iptu": string | null,
+    "inscricao_cadastral": string | null,
+    "area_total": string | null,
+    "area_construida": string | null,
+    "descricao_imovel": string | null,
+    "padrao_construtivo": string | null,
+    "averbacao": string | null,
+    "onus": string | null,
+    "alienacao": string | null,
+    "hipoteca": string | null,
+    "penhora": string | null,
+    "inventario": string | null,
+    "liquidez_aparente": string | null,
     "endereco_imovel": string | null,
-    "metragem": string | null,
     "cidade_imovel": string | null,
     "uf_imovel": string | null,
     "titularidade": string | null,
-    "onus": string | null,
-    "saldo_medio_estimado": string | null,
-    "banco": string | null
+    "hectares": string | null,
+    "car": string | null,
+    "ccir": string | null,
+    "itr": string | null,
+    "georreferenciamento": string | null,
+    "atividade_explorada": string | null,
+    "benfeitorias": string | null,
+    "logistica": string | null,
+    "produtividade_aparente": string | null,
+    "marca": string | null,
+    "modelo": string | null,
+    "ano_veiculo": string | null,
+    "placa": string | null,
+    "renavam": string | null,
+    "alienacao_veiculo": string | null,
+    "debitos_veiculo": string | null
+  },
+  "leitura_operacional": {
+    "perfil_patrimonial": string | null,
+    "perfil_financeiro": string | null,
+    "grau_organizacao_documental": "alto" | "médio" | "baixo" | null,
+    "complexidade_operacao": "simples" | "média" | "complexa" | null,
+    "mitigadores_risco": [string],
+    "fragilidades": [string],
+    "aderencia_bancaria_aparente": "alta" | "média" | "baixa" | null
   },
   "pendencias_criticas": [string],
   "pendencias_secundarias": [string],
@@ -1159,6 +1223,7 @@ REGRAS PARA pode_prosseguir:
 
 REGRAS ABSOLUTAS:
 - NUNCA invente dados não presentes nos documentos
+- NÃO crie renda, patrimônio ou documentos inexistentes
 - Se não conseguir identificar um dado, use null
 - Seja objetivo e técnico
 - Responda APENAS com JSON válido, sem markdown`;
@@ -1231,10 +1296,50 @@ Analise cada documento enviado abaixo e retorne o JSON completo.`,
             alteradoPor: user.id,
           });
 
-          // Salvar dados extraídos no perfilExtratidoJson
-          if (resultado.dados_extraidos_operacao) {
+          // Salvar dados extraídos + leitura operacional no perfilExtraidoJson
+          if (resultado.dados_extraidos_operacao || resultado.leitura_operacional) {
+            const jsonEstruturado = {
+              cliente: resultado.dados_extraidos_operacao ?? {},
+              garantia: {
+                matricula_imovel: resultado.dados_extraidos_operacao?.matricula_imovel,
+                cartorio: resultado.dados_extraidos_operacao?.cartorio,
+                iptu: resultado.dados_extraidos_operacao?.iptu,
+                area_total: resultado.dados_extraidos_operacao?.area_total,
+                area_construida: resultado.dados_extraidos_operacao?.area_construida,
+                onus: resultado.dados_extraidos_operacao?.onus,
+                alienacao: resultado.dados_extraidos_operacao?.alienacao,
+                hipoteca: resultado.dados_extraidos_operacao?.hipoteca,
+                penhora: resultado.dados_extraidos_operacao?.penhora,
+                liquidez_aparente: resultado.dados_extraidos_operacao?.liquidez_aparente,
+                hectares: resultado.dados_extraidos_operacao?.hectares,
+                car: resultado.dados_extraidos_operacao?.car,
+                marca: resultado.dados_extraidos_operacao?.marca,
+                modelo: resultado.dados_extraidos_operacao?.modelo,
+                placa: resultado.dados_extraidos_operacao?.placa,
+              },
+              financeiro: {
+                renda_mensal_estimada: resultado.dados_extraidos_operacao?.renda_mensal_estimada,
+                faturamento_mensal: resultado.dados_extraidos_operacao?.faturamento_mensal,
+                saldo_medio_estimado: resultado.dados_extraidos_operacao?.saldo_medio_estimado,
+                movimentacao_financeira: resultado.dados_extraidos_operacao?.movimentacao_financeira,
+                renda_declarada: resultado.dados_extraidos_operacao?.renda_declarada,
+                banco: resultado.dados_extraidos_operacao?.banco,
+              },
+              documentacao: {
+                situacao_geral: resultado.situacao_geral,
+                pode_prosseguir: resultado.pode_prosseguir,
+                checklist_total: checklistTotal,
+                checklist_concluidos: checklistConcluidos,
+              },
+              risco: resultado.leitura_operacional ?? {},
+              pendencias: {
+                criticas: resultado.pendencias_criticas ?? [],
+                secundarias: resultado.pendencias_secundarias ?? [],
+                ausentes: resultado.documentos_ausentes ?? [],
+              },
+            };
             await updateOperacao(input.operacaoId, {
-              perfilExtraidoJson: resultado.dados_extraidos_operacao,
+              perfilExtraidoJson: jsonEstruturado,
             });
           }
 
@@ -1256,6 +1361,7 @@ Analise cada documento enviado abaixo e retorne o JSON completo.`,
             situacaoGeral,
             documentosPorStatus: resultado.documentos ?? [],
             dadosExtraidos: resultado.dados_extraidos_operacao ?? null,
+            leituraOperacional: resultado.leitura_operacional ?? null,
             pendenciasCriticas: resultado.pendencias_criticas ?? [],
             pendenciasSecundarias: resultado.pendencias_secundarias ?? [],
             documentosAusentes: resultado.documentos_ausentes ?? [],
@@ -1316,12 +1422,112 @@ Analise cada documento enviado abaixo e retorne o JSON completo.`,
         const op = await getOperacaoById(input.operacaoId);
         if (!op) throw new TRPCError({ code: "NOT_FOUND" });
         if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
-        const perfil = (op as any).perfilExtraidoJson ?? {};
+
+        // Extrair dados estruturados do JSON salvo pela IA de pré-análise
+        const perfilJson = (op as any).perfilExtraidoJson ?? {};
+        const cliente = perfilJson.cliente ?? perfilJson; // suporte a formato legado
+        const garantia = perfilJson.garantia ?? {};
+        const financeiro = perfilJson.financeiro ?? {};
+        const risco = perfilJson.risco ?? {};
+        const pendencias = perfilJson.pendencias ?? {};
+
         const valorGarantia = (op as any).valorGarantia ?? "Não informado";
         const tipoGarantia = (op as any).tipoGarantiaDescricao ?? op.produto;
-        const ltv = valorGarantia && op.valorSolicitado ? ((parseFloat(op.valorSolicitado) / parseFloat(valorGarantia)) * 100).toFixed(1) + "%" : "Não calculado";
-        const systemPrompt = `Você é um Analista de Crédito Sênior da Ativa Soluções. Gere uma defesa comercial técnica e persuasiva para apresentação às Instituições Financeiras.\nREGRAS: Tom SEMPRE positivo e consultivo. Máximo 2.000 caracteres. Linguagem técnica e institucional. NÃO invente informações. NÃO mencione riscos sem mitigadores.\nESTRUTURA: 1) Perfil favorável do cliente 2) Finalidade clara e objetiva 3) Capacidade financeira demonstrada 4) Garantia sólida e LTV conservador 5) Regularidade documental 6) Parecer positivo do analista.`;
-        const userMessage = `Gere defesa comercial para:\nOperação: ${op.codigoOperacao}\nProduto: ${op.produto}\nCliente: ${op.nomeCliente}\nValor Solicitado: R$ ${op.valorSolicitado}\nPrazo: ${op.prazo} meses\nFinalidade: ${op.finalidade}\nTipo de Garantia: ${tipoGarantia}\nValor da Garantia: R$ ${valorGarantia}\nLTV Estimado: ${ltv}\nContexto: ${op.contextoOperacao ?? "Não informado"}\nPerfil Extraído: ${JSON.stringify(perfil)}${input.comentario ? `\nComentário do consultor: ${input.comentario}` : ""}`;
+        const ltv = valorGarantia && op.valorSolicitado && !isNaN(parseFloat(valorGarantia))
+          ? ((parseFloat(op.valorSolicitado) / parseFloat(valorGarantia)) * 100).toFixed(1) + "%"
+          : "Não calculado";
+
+        // Montar bloco de dados estruturados para o prompt
+        const blocoCliente = [
+          cliente.nome_completo ? `Nome: ${cliente.nome_completo}` : null,
+          cliente.cpf ? `CPF: ${cliente.cpf}` : null,
+          cliente.data_nascimento ? `Nascimento: ${cliente.data_nascimento}` : null,
+          cliente.estado_civil ? `Estado Civil: ${cliente.estado_civil}` : null,
+          cliente.profissao ? `Profissão: ${cliente.profissao}` : null,
+          cliente.empresa ? `Empresa: ${cliente.empresa}` : null,
+          cliente.participacao_societaria ? `Participação Societária: ${cliente.participacao_societaria}` : null,
+          cliente.patrimonio_aparente ? `Patrimônio: ${cliente.patrimonio_aparente}` : null,
+        ].filter(Boolean).join(" | ");
+
+        const blocoFinanceiro = [
+          financeiro.renda_mensal_estimada ? `Renda mensal estimada: ${financeiro.renda_mensal_estimada}` : null,
+          financeiro.faturamento_mensal ? `Faturamento mensal: ${financeiro.faturamento_mensal}` : null,
+          financeiro.saldo_medio_estimado ? `Saldo médio: ${financeiro.saldo_medio_estimado}` : null,
+          financeiro.movimentacao_financeira ? `Movimentação: ${financeiro.movimentacao_financeira}` : null,
+          financeiro.renda_declarada ? `Renda declarada (IRPF): ${financeiro.renda_declarada}` : null,
+          financeiro.banco ? `Banco principal: ${financeiro.banco}` : null,
+        ].filter(Boolean).join(" | ");
+
+        const blocoGarantia = [
+          garantia.matricula_imovel ? `Matrícula: ${garantia.matricula_imovel}` : null,
+          garantia.cartorio ? `Cartório: ${garantia.cartorio}` : null,
+          garantia.area_total ? `Área total: ${garantia.area_total}` : null,
+          garantia.area_construida ? `Área construída: ${garantia.area_construida}` : null,
+          garantia.onus ? `Ônus: ${garantia.onus}` : null,
+          garantia.alienacao ? `Alienação: ${garantia.alienacao}` : null,
+          garantia.hipoteca ? `Hipoteca: ${garantia.hipoteca}` : null,
+          garantia.penhora ? `Penhora: ${garantia.penhora}` : null,
+          garantia.liquidez_aparente ? `Liquidez: ${garantia.liquidez_aparente}` : null,
+          garantia.hectares ? `Hectares: ${garantia.hectares}` : null,
+          garantia.marca ? `Veículo: ${garantia.marca} ${garantia.modelo ?? ""} ${garantia.placa ?? ""}` : null,
+        ].filter(Boolean).join(" | ");
+
+        const blocoRisco = [
+          risco.perfil_patrimonial ? `Perfil patrimonial: ${risco.perfil_patrimonial}` : null,
+          risco.perfil_financeiro ? `Perfil financeiro: ${risco.perfil_financeiro}` : null,
+          risco.grau_organizacao_documental ? `Organização documental: ${risco.grau_organizacao_documental}` : null,
+          risco.aderencia_bancaria_aparente ? `Aderência bancária: ${risco.aderencia_bancaria_aparente}` : null,
+          risco.mitigadores_risco?.length ? `Mitigadores: ${risco.mitigadores_risco.join("; ")}` : null,
+          risco.fragilidades?.length ? `Fragilidades: ${risco.fragilidades.join("; ")}` : null,
+        ].filter(Boolean).join(" | ");
+
+        const systemPrompt = `Você é um Analista de Crédito Sênior da Ativa Soluções, especializado em crédito com garantia real.
+
+SUA MISSÃO: Gere uma Defesa Comercial técnica, persuasiva e altamente personalizada para apresentação às Instituições Financeiras.
+
+USE TODOS OS DADOS FORNECIDOS para construir argumentos específicos e concretos. Quanto mais dados disponíveis, mais rica e personalizada deve ser a defesa.
+
+ESTRUTURA OBRIGATÓRIA:
+1. PERFIL DO TOMADOR: Apresente o cliente com dados concretos (profissão, renda, patrimônio, histórico)
+2. CAPACIDADE DE PAGAMENTO: Demonstre com números reais (renda, movimentação, saldo, faturamento)
+3. GARANTIA: Descreva o bem com dados da matrícula/registro, área, localização, situação jurídica
+4. LTV E PROPORCIONALIDADE: Argumente sobre o LTV e margem de segurança
+5. FINALIDADE E COERÊNCIA: Conecte a finalidade ao perfil do tomador
+6. REGULARIDADE DOCUMENTAL: Mencione a qualidade e completude da documentação
+7. PARECER POSITIVO: Conclua com recomendação clara de aprovação
+
+REGRAS:
+- Tom SEMPRE positivo, técnico e institucional
+- Máximo 2.200 caracteres
+- NÃO invente informações não fornecidas
+- NÃO mencione riscos sem mitigadores
+- Use linguagem de crédito (LTV, CCB, alienacão fiduciária, etc.)
+- Seja específico: cite números reais quando disponíveis`;
+
+        const userMessage = `DADOS DA OPERAÇÃO:
+Código: ${op.codigoOperacao} | Produto: ${op.produto}
+Cliente: ${op.nomeCliente}
+Valor Solicitado: R$ ${op.valorSolicitado} | Prazo: ${op.prazo} meses
+Finalidade: ${op.finalidade}
+Tipo de Garantia: ${tipoGarantia} | Valor da Garantia: R$ ${valorGarantia}
+LTV Estimado: ${ltv}
+Estado Civil: ${op.estadoCivil ?? "Não informado"}
+Contexto: ${op.contextoOperacao ?? "Não informado"}
+
+PERFIL DO TOMADOR (extraído dos documentos):
+${blocoCliente || "Dados não extraídos"}
+
+CAPACIDADE FINANCEIRA:
+${blocoFinanceiro || "Dados não extraídos"}
+
+GARANTIA:
+${blocoGarantia || "Dados não extraídos"}
+
+LEITURA OPERACIONAL DA IA:
+${blocoRisco || "Não disponível"}
+${pendencias.criticas?.length ? `\nPendências críticas resolvidas: ${pendencias.criticas.join("; ")}` : ""}
+${input.comentario ? `\nComentário do consultor: ${input.comentario}` : ""}`;
+
         try {
           const response = await invokeLLM({
             messages: [

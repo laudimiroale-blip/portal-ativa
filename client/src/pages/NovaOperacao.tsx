@@ -1,5 +1,6 @@
 import AtivaDashboardLayout from "@/components/AtivaDashboardLayout";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,12 +12,17 @@ import {
   ArrowLeft,
   ArrowRight,
   Bot,
+  Brain,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
   Copy,
+  Download,
   Edit3,
+  Eye,
   FileText,
+  FolderOpen,
+  Layers,
   Loader2,
   MessageSquare,
   RefreshCw,
@@ -25,8 +31,8 @@ import {
   Upload,
   User,
   XCircle,
-  FolderOpen,
-  Layers,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -541,11 +547,21 @@ function Etapa3Documentos({
       numero_documento: string | null;
     };
   };
+  type LeituraOperacional = {
+    perfil_patrimonial: string | null;
+    perfil_financeiro: string | null;
+    grau_organizacao_documental: "alto" | "médio" | "baixo" | null;
+    complexidade_operacao: "simples" | "média" | "complexa" | null;
+    mitigadores_risco: string[];
+    fragilidades: string[];
+    aderencia_bancaria_aparente: "alta" | "média" | "baixa" | null;
+  };
   const [resultadoConferencia, setResultadoConferencia] = useState<{
     aprovado: boolean;
     situacaoGeral: string;
     documentosPorStatus: DocStatus[];
     dadosExtraidos: Record<string, string | null> | null;
+    leituraOperacional: LeituraOperacional | null;
     pendenciasCriticas: string[];
     pendenciasSecundarias: string[];
     documentosAusentes: string[];
@@ -554,6 +570,38 @@ function Etapa3Documentos({
     checklist_concluidos: number;
   } | null>(null);
   const [conferindo, setConferindo] = useState(false);
+
+  // Visualizador de arquivos
+  const [visualizadorAberto, setVisualizadorAberto] = useState(false);
+  const [previewArquivo, setPreviewArquivo] = useState<{ url: string; nome: string; tipo: string } | null>(null);
+  const [zoomPreview, setZoomPreview] = useState(1);
+
+  // Perfil extraído pela IA (exibido após conferência)
+  const [perfilExtraido, setPerfilExtraido] = useState<Record<string, string | null> | null>(null);
+
+  // Índice do arquivo atual na lista de navegação
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  const abrirPreview = (url: string, nome: string, index?: number) => {
+    const ext = nome.toLowerCase().split(".").pop() ?? "";
+    const tipo = ["pdf"].includes(ext) ? "pdf" : ["jpg", "jpeg", "png", "webp", "heic"].includes(ext) ? "imagem" : "outro";
+    setPreviewArquivo({ url, nome, tipo });
+    setZoomPreview(1);
+    setPreviewIndex(index ?? 0);
+    setVisualizadorAberto(true);
+  };
+
+  const navegarPreview = (direcao: "anterior" | "proximo") => {
+    if (!documentos) return;
+    const lista = documentos.filter((d) => d.arquivoUrl);
+    const novoIdx = direcao === "proximo"
+      ? Math.min(previewIndex + 1, lista.length - 1)
+      : Math.max(previewIndex - 1, 0);
+    const doc = lista[novoIdx];
+    if (doc?.arquivoUrl) {
+      abrirPreview(doc.arquivoUrl, doc.nomeDocumento, novoIdx);
+    }
+  };
 
   // Upload em lote
   const classificarMutation = trpc.ia.classificarDocumentos.useMutation();
@@ -779,6 +827,10 @@ function Etapa3Documentos({
     try {
       const resultado = await conferirMutation.mutateAsync({ operacaoId });
       setResultadoConferencia(resultado as any);
+      // Capturar perfil extraído para exibir no painel
+      if ((resultado as any).dadosExtraidos) {
+        setPerfilExtraido((resultado as any).dadosExtraidos);
+      }
       if (resultado.aprovado) {
         toast.success("Documentação validada pela IA! Você pode prosseguir.");
         await atualizarMutation.mutateAsync({ id: operacaoId, etapaAtual: 4 });
@@ -812,13 +864,104 @@ function Etapa3Documentos({
   // Fase de testes: avanço sempre liberado — alertas visuais mantidos
   const podeProsseguir = true;
 
+    const docsComArquivo = documentos?.filter((d) => d.arquivoUrl) ?? [];
+
     return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground mb-1">Documentos — {produto}</h2>
-        <p className="text-sm text-muted-foreground">
-          Envie os documentos do checklist. Você pode anexar mais de um arquivo por item.
-        </p>
+      {/* Modal de Preview de Arquivo */}
+      <Dialog open={visualizadorAberto} onOpenChange={setVisualizadorAberto}>
+        <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="px-4 py-3 border-b border-border/40 flex-shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle className="text-sm font-medium text-foreground truncate max-w-[40%]">
+                {previewArquivo?.nome ?? "Visualizar arquivo"}
+              </DialogTitle>
+              {/* Navegação entre documentos */}
+              {docsComArquivo.length > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => navegarPreview("anterior")} disabled={previewIndex === 0} className="h-7 w-7 p-0">
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{previewIndex + 1}/{docsComArquivo.length}</span>
+                  <Button size="sm" variant="ghost" onClick={() => navegarPreview("proximo")} disabled={previewIndex === docsComArquivo.length - 1} className="h-7 w-7 p-0">
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
+              <div className="flex items-center gap-1 ml-auto">
+                {previewArquivo?.tipo === "imagem" && (
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => setZoomPreview((z) => Math.max(0.5, z - 0.25))} className="h-7 w-7 p-0">
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoomPreview * 100)}%</span>
+                    <Button size="sm" variant="ghost" onClick={() => setZoomPreview((z) => Math.min(3, z + 0.25))} className="h-7 w-7 p-0">
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </Button>
+                  </>
+                )}
+                {previewArquivo?.url && (
+                  <a href={previewArquivo.url} download={previewArquivo.nome} target="_blank" rel="noreferrer">
+                    <Button size="sm" variant="ghost" className="h-7 px-2 gap-1 text-xs">
+                      <Download className="w-3.5 h-3.5" />Download
+                    </Button>
+                  </a>
+                )}
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto flex items-start justify-center bg-black/20 p-2">
+            {previewArquivo?.tipo === "pdf" && (
+              <iframe
+                src={previewArquivo.url + "#toolbar=1&navpanes=0"}
+                className="w-full h-full rounded border-0"
+                title={previewArquivo.nome}
+              />
+            )}
+            {previewArquivo?.tipo === "imagem" && (
+              <img
+                src={previewArquivo.url}
+                alt={previewArquivo.nome}
+                style={{ transform: `scale(${zoomPreview})`, transformOrigin: "top center", transition: "transform 0.2s" }}
+                className="max-w-full rounded shadow-lg"
+              />
+            )}
+            {previewArquivo?.tipo === "outro" && (
+              <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+                <FileText className="w-12 h-12" />
+                <p className="text-sm">Visualização não disponível para este tipo de arquivo.</p>
+                <a href={previewArquivo.url} download={previewArquivo.nome} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <Download className="w-3.5 h-3.5" />Baixar arquivo
+                  </Button>
+                </a>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground mb-1">Documentos — {produto}</h2>
+          <p className="text-sm text-muted-foreground">
+            Envie os documentos do checklist. Você pode anexar mais de um arquivo por item.
+          </p>
+        </div>
+        {docsComArquivo.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const doc = docsComArquivo[0];
+              if (doc?.arquivoUrl) abrirPreview(doc.arquivoUrl, doc.nomeDocumento, 0);
+            }}
+            className="gap-1.5 text-xs flex-shrink-0"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            Visualizar Arquivos ({docsComArquivo.length})
+          </Button>
+        )}
       </div>
 
       {/* Área de Upload em Lote */}
@@ -1013,7 +1156,7 @@ function Etapa3Documentos({
           {resultadoConferencia.dadosExtraidos && Object.values(resultadoConferencia.dadosExtraidos).some(v => v !== null && v !== "") && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-2">
               <p className="text-xs font-medium text-primary uppercase tracking-wider">Dados extraídos automaticamente pela IA:</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1">
                 {Object.entries(resultadoConferencia.dadosExtraidos)
                   .filter(([, v]) => v !== null && v !== "")
                   .map(([k, v]) => (
@@ -1023,6 +1166,74 @@ function Etapa3Documentos({
                     </div>
                   ))}
               </div>
+            </div>
+          )}
+
+          {/* Leitura Operacional */}
+          {resultadoConferencia.leituraOperacional && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+              <p className="text-xs font-medium text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Brain className="w-3.5 h-3.5" />
+                Leitura Operacional da IA
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {resultadoConferencia.leituraOperacional.perfil_patrimonial && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground block">Perfil Patrimonial</span>
+                    <span className="text-foreground">{resultadoConferencia.leituraOperacional.perfil_patrimonial}</span>
+                  </div>
+                )}
+                {resultadoConferencia.leituraOperacional.perfil_financeiro && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground block">Perfil Financeiro</span>
+                    <span className="text-foreground">{resultadoConferencia.leituraOperacional.perfil_financeiro}</span>
+                  </div>
+                )}
+                {resultadoConferencia.leituraOperacional.grau_organizacao_documental && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground block">Organização Documental</span>
+                    <span className={cn(
+                      "font-medium capitalize",
+                      resultadoConferencia.leituraOperacional.grau_organizacao_documental === "alto" ? "text-emerald-400" :
+                      resultadoConferencia.leituraOperacional.grau_organizacao_documental === "médio" ? "text-yellow-400" : "text-red-400"
+                    )}>{resultadoConferencia.leituraOperacional.grau_organizacao_documental}</span>
+                  </div>
+                )}
+                {resultadoConferencia.leituraOperacional.aderencia_bancaria_aparente && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground block">Aderência Bancária</span>
+                    <span className={cn(
+                      "font-medium capitalize",
+                      resultadoConferencia.leituraOperacional.aderencia_bancaria_aparente === "alta" ? "text-emerald-400" :
+                      resultadoConferencia.leituraOperacional.aderencia_bancaria_aparente === "média" ? "text-yellow-400" : "text-red-400"
+                    )}>{resultadoConferencia.leituraOperacional.aderencia_bancaria_aparente}</span>
+                  </div>
+                )}
+              </div>
+              {resultadoConferencia.leituraOperacional.mitigadores_risco?.length > 0 && (
+                <div className="text-xs">
+                  <span className="text-muted-foreground block mb-1">Mitigadores de Risco</span>
+                  <ul className="space-y-0.5">
+                    {resultadoConferencia.leituraOperacional.mitigadores_risco.map((m, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-emerald-300/80">
+                        <CheckCircle2 className="w-3 h-3 flex-shrink-0 mt-0.5 text-emerald-400" />{m}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {resultadoConferencia.leituraOperacional.fragilidades?.length > 0 && (
+                <div className="text-xs">
+                  <span className="text-muted-foreground block mb-1">Fragilidades</span>
+                  <ul className="space-y-0.5">
+                    {resultadoConferencia.leituraOperacional.fragilidades.map((f, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-yellow-300/80">
+                        <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-0.5 text-yellow-400" />{f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1064,6 +1275,19 @@ function Etapa3Documentos({
                   {temEnviados > 0 && (
                     <span className="text-xs text-emerald-400 hidden sm:block">{temEnviados} arquivo{temEnviados > 1 ? "s" : ""}</span>
                   )}
+                  {/* Botão Visualizar — aparece quando há arquivo no banco */}
+                  {doc.arquivoUrl && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => abrirPreview(doc.arquivoUrl!, doc.nomeDocumento)}
+                      className="gap-1 text-xs text-muted-foreground hover:text-foreground h-7 px-2"
+                      title="Visualizar arquivo"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span className="hidden sm:inline">Ver</span>
+                    </Button>
+                  )}
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
@@ -1084,11 +1308,11 @@ function Etapa3Documentos({
                     disabled={temEnviando}
                     className={cn(
                       "gap-1.5 text-xs",
-                      isEnviado && "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                      isEnviado ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" : ""
                     )}
                   >
                     {temEnviando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                    {isEnviado || temEnviados > 0 ? "Adicionar arquivos" : "Enviar"}
+                    {isEnviado ? "Substituir" : temEnviados > 0 ? "Adicionar" : "Enviar"}
                   </Button>
                 </div>
               </div>
@@ -1128,6 +1352,80 @@ function Etapa3Documentos({
           );
         })}
       </div>
+
+      {/* Painel: Lista de Arquivos com Visualizar/Substituir */}
+      {docsComArquivo.length > 0 && (
+        <div className="rounded-lg border border-border/40 overflow-hidden">
+          <div className="px-4 py-2.5 bg-muted/20 border-b border-border/30 flex items-center gap-2">
+            <Eye className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Arquivos Enviados ({docsComArquivo.length})</span>
+          </div>
+          <div className="divide-y divide-border/20">
+            {docsComArquivo.map((doc, idx) => {
+              const docR = resultadoConferencia?.documentosPorStatus?.find((d) => d.id === doc.id);
+              return (
+                <div key={doc.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{doc.nomeDocumento}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {docR ? (
+                        <span className={cn(
+                          "text-[10px] font-medium",
+                          docR.semaforo === "verde" ? "text-emerald-400" : docR.semaforo === "amarelo" ? "text-yellow-400" : "text-red-400"
+                        )}>
+                          {docR.semaforo === "verde" ? "✅ Validado" : docR.semaforo === "amarelo" ? "⚠️ Ressalva" : "❌ Problema"}
+                          {docR.tipo_identificado && docR.tipo_identificado !== doc.nomeDocumento ? ` — ${docR.tipo_identificado}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground">{doc.categoria}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => abrirPreview(doc.arquivoUrl!, doc.nomeDocumento, idx)}
+                      className="h-7 px-2 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <Eye className="w-3 h-3" />Visualizar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => fileInputRefs.current[doc.id]?.click()}
+                      className="h-7 px-2 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <RefreshCw className="w-3 h-3" />Substituir
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Painel: Perfil Extraído pela IA */}
+      {perfilExtraido && Object.values(perfilExtraido).some((v) => v !== null && v !== "") && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-primary/20 flex items-center gap-2">
+            <Brain className="w-3.5 h-3.5 text-primary" />
+            <span className="text-xs font-semibold text-primary uppercase tracking-wider">Perfil Extraído pela IA</span>
+            <span className="ml-auto text-[10px] text-muted-foreground">Será usado automaticamente na Defesa Comercial</span>
+          </div>
+          <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2">
+            {Object.entries(perfilExtraido)
+              .filter(([, v]) => v !== null && v !== "")
+              .map(([k, v]) => (
+                <div key={k} className="text-xs">
+                  <span className="text-muted-foreground capitalize block">{k.replace(/_/g, " ")}</span>
+                  <span className="text-foreground font-medium">{v}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between pt-2">
         <Button variant="outline" onClick={onBack} className="gap-2">
@@ -1310,57 +1608,106 @@ function Etapa4ResumoDefesa({
         </div>
       </div>
 
-      {/* Perfil do Tomador */}
-      <div className="border border-border/40 rounded-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border/30">
-          <h3 className="text-sm font-semibold text-foreground">Perfil do Tomador (extraído pela IA)</h3>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleExtrairPerfil}
-            disabled={extraindo || !operacaoId}
-            className="gap-1.5 text-xs"
-          >
-            {extraindo ? <Loader2 className="w-3 h-3 animate-spin" /> : perfilAtual ? <RefreshCw className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
-            {perfilAtual ? "Reextrair" : "Extrair com IA"}
-          </Button>
-        </div>
-        {perfilAtual ? (
-          <div className="p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {camposPerfil.map(({ key, label }) => {
-                const valor = perfilAtual.perfil?.[key];
-                if (!valor || valor === "Informação não localizada automaticamente") return null;
-                return (
-                  <div key={key} className="space-y-0.5">
-                    <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="text-sm text-foreground">{valor}</p>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="border-t border-border/30 pt-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Dados da Garantia</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {camposGarantia.map(({ key, label }) => {
-                  const valor = perfilAtual.garantia?.[key];
-                  return (
-                    <div key={key} className="space-y-0.5">
-                      <p className="text-xs text-muted-foreground">{label}</p>
-                      <p className="text-sm text-foreground">{valor ?? <span className="text-muted-foreground/50 italic text-xs">Não localizado</span>}</p>
-                    </div>
-                  );
-                })}
+      {/* Perfil do Tomador — JSON Estruturado */}
+      {(() => {
+        const pj = (op as any)?.perfilExtraidoJson as Record<string, any> | null;
+        const clienteData = pj?.cliente ?? pj;
+        const financeiroData = pj?.financeiro ?? {};
+        const garantiaData = pj?.garantia ?? {};
+        const riscoData = pj?.risco ?? {};
+        const temDados = pj && Object.values(clienteData ?? {}).some((v) => v !== null && v !== "");
+        return (
+          <div className="border border-border/40 rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border/30">
+              <div className="flex items-center gap-2">
+                <Brain className="w-3.5 h-3.5 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">Perfil Extraído pela IA</h3>
+                {temDados && <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">Disponível</span>}
               </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleExtrairPerfil}
+                disabled={extraindo || !operacaoId}
+                className="gap-1.5 text-xs"
+              >
+                {extraindo ? <Loader2 className="w-3 h-3 animate-spin" /> : temDados ? <RefreshCw className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+                {temDados ? "Reextrair" : "Extrair com IA"}
+              </Button>
             </div>
+            {temDados ? (
+              <div className="divide-y divide-border/20">
+                {/* Bloco: Identificação */}
+                {Object.values(clienteData ?? {}).some((v) => v !== null && v !== "") && (
+                  <div className="p-4">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Identificação do Tomador</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                      {Object.entries(clienteData ?? {}).filter(([, v]) => v !== null && v !== "").map(([k, v]) => (
+                        <div key={k} className="text-xs">
+                          <span className="text-muted-foreground block capitalize">{k.replace(/_/g, " ")}</span>
+                          <span className="text-foreground font-medium">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Bloco: Capacidade Financeira */}
+                {Object.values(financeiroData).some((v) => v !== null && v !== "") && (
+                  <div className="p-4">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Capacidade Financeira</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                      {Object.entries(financeiroData).filter(([, v]) => v !== null && v !== "").map(([k, v]) => (
+                        <div key={k} className="text-xs">
+                          <span className="text-muted-foreground block capitalize">{k.replace(/_/g, " ")}</span>
+                          <span className="text-foreground font-medium">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Bloco: Garantia */}
+                {Object.values(garantiaData).some((v) => v !== null && v !== "") && (
+                  <div className="p-4">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Dados da Garantia</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                      {Object.entries(garantiaData).filter(([, v]) => v !== null && v !== "").map(([k, v]) => (
+                        <div key={k} className="text-xs">
+                          <span className="text-muted-foreground block capitalize">{k.replace(/_/g, " ")}</span>
+                          <span className="text-foreground font-medium">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Bloco: Leitura Operacional */}
+                {(riscoData.perfil_patrimonial || riscoData.perfil_financeiro || riscoData.aderencia_bancaria_aparente) && (
+                  <div className="p-4 bg-amber-500/5">
+                    <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-2">Leitura Operacional</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {riscoData.perfil_patrimonial && <div className="text-xs"><span className="text-muted-foreground block">Perfil Patrimonial</span><span className="text-foreground">{riscoData.perfil_patrimonial}</span></div>}
+                      {riscoData.perfil_financeiro && <div className="text-xs"><span className="text-muted-foreground block">Perfil Financeiro</span><span className="text-foreground">{riscoData.perfil_financeiro}</span></div>}
+                      {riscoData.aderencia_bancaria_aparente && <div className="text-xs"><span className="text-muted-foreground block">Aderência Bancária</span><span className={cn("font-medium capitalize", riscoData.aderencia_bancaria_aparente === "alta" ? "text-emerald-400" : riscoData.aderencia_bancaria_aparente === "média" ? "text-yellow-400" : "text-red-400")}>{riscoData.aderencia_bancaria_aparente}</span></div>}
+                      {riscoData.complexidade_operacao && <div className="text-xs"><span className="text-muted-foreground block">Complexidade</span><span className="text-foreground capitalize">{riscoData.complexidade_operacao}</span></div>}
+                    </div>
+                    {riscoData.mitigadores_risco?.length > 0 && (
+                      <div className="mt-2 text-xs">
+                        <span className="text-muted-foreground block mb-1">Mitigadores</span>
+                        <ul className="space-y-0.5">{riscoData.mitigadores_risco.map((m: string, i: number) => <li key={i} className="flex gap-1.5 text-emerald-300/80"><CheckCircle2 className="w-3 h-3 flex-shrink-0 mt-0.5 text-emerald-400" />{m}</li>)}</ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                <Brain className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+                <p>Nenhum perfil extraído ainda.</p>
+                <p className="text-xs mt-1">Se a Etapa 3 foi concluída com a conferência da IA, o perfil já foi extraído automaticamente. Caso contrário, clique em "Extrair com IA".</p>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="p-6 text-center text-sm text-muted-foreground">
-            <Bot className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
-            Clique em "Extrair com IA" para extrair automaticamente os dados do tomador e da garantia a partir dos documentos enviados.
-          </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Defesa Comercial */}
       <div className="border border-border/40 rounded-lg overflow-hidden">

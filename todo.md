@@ -204,3 +204,24 @@
 - [x] Busca rápida por nome/código
 - [x] Cores por status, alertas operacionais, badges de pendência
 - [x] Manter identidade visual dark premium
+
+## Pasted_content_20 — IA Evoluída + Visualizador de Arquivos
+
+### Fase 1 — Visualizador de Arquivos (Etapa 3)
+- [x] Adicionar botão "Visualizar Arquivos" na Etapa 3 ao lado de "Adicionar Arquivos"
+- [x] Criar modal/drawer de visualização de documentos com lista de arquivos anexados
+- [x] Cada item da lista exibe: nome do arquivo, tipo identificado pela IA, status de validação, ações (Visualizar / Substituir)
+- [x] Botão "Visualizar" abre preview do PDF/imagem em modal com zoom e download opcional
+- [x] Suporte a PDF, JPG e PNG no preview
+
+### Fase 2 — IA de Pré-Análise Evoluída
+- [x] Expandir prompt da IA para extrair perfil do tomador (nome, CPF, RG, estado civil, profissão, empresa, participação societária, endereço, telefone, e-mail, renda, faturamento, saldo médio, movimentação financeira, patrimônio aparente)
+- [x] Expandir prompt para perfilar garantia: imóvel (matrícula, cartório, IPTU, área, ônus, alienação, hipoteca, penhora, inventário, liquidez), imóvel rural (hectares, CAR, CCIR, ITR, benfeitorias), veículo (marca, modelo, ano, placa, renavam, alienação, débitos)
+- [x] Expandir prompt para gerar leitura operacional (perfil patrimonial, financeiro, grau de organização documental, complexidade, mitigadores, fragilidades, aderência bancária)
+- [x] Gerar JSON estruturado da operação (cliente, financeiro, garantia, documentacao, risco, pendencias) e salvar em `perfilExtraidoJson` no banco
+- [x] Exibir na Etapa 3 (após análise IA) um painel "Perfil Extraído" com os dados estruturados
+
+### Fase 3 — Integração com Etapa 4 (Defesa Comercial)
+- [x] Ao clicar em "Gerar Defesa" na Etapa 4, enviar automaticamente para a IA: dados das etapas 1-2, relato do consultor, perfilamento do tomador, leitura patrimonial/financeira, dados da garantia, pendências e alertas
+- [x] Atualizar prompt da IA de Defesa Comercial para usar o JSON estruturado como contexto rico
+- [x] Garantir que a IA nunca invente informações — apenas use dados comprovados
