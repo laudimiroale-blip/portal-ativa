@@ -8,6 +8,7 @@ import { ptBR } from "date-fns/locale";
 import {
   AlertTriangle,
   Archive,
+  ArchiveRestore,
   ArrowLeft,
   Bot,
   Building2,
@@ -51,6 +52,16 @@ export default function DetalheOperacao({ params }: Props) {
     onSuccess: () => {
       toast.success("Operação arquivada.");
       setModalArquivar(false);
+      utils.operacoes.obter.invalidate({ id: operacaoId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [modalDesarquivar, setModalDesarquivar] = useState(false);
+  const desarquivarMutation = trpc.operacoes.desarquivar.useMutation({
+    onSuccess: () => {
+      toast.success("Operação restaurada.");
+      setModalDesarquivar(false);
       utils.operacoes.obter.invalidate({ id: operacaoId });
     },
     onError: (e) => toast.error(e.message),
@@ -132,6 +143,16 @@ export default function DetalheOperacao({ params }: Props) {
                 Arquivar
               </button>
             )}
+            {isAdmin && operacao && operacao.statusMacro === "Arquivada" && (
+              <button
+                onClick={() => setModalDesarquivar(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-green-500/30 text-green-400 bg-green-500/10 hover:bg-green-500/20 transition-colors"
+                title="Restaurar operação"
+              >
+                <ArchiveRestore className="w-3.5 h-3.5" />
+                Restaurar
+              </button>
+            )}
             {isAdmin && operacao && (
               <button
                 onClick={() => { setModalExcluir(true); setCodigoConfirmacao(""); }}
@@ -187,6 +208,41 @@ export default function DetalheOperacao({ params }: Props) {
           {activeTab === "historico" && <TabHistorico operacaoId={operacaoId} />}
         </div>
       </div>
+
+      {/* Modal Desarquivar */}
+      {modalDesarquivar && operacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <ArchiveRestore className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Restaurar Operação</h3>
+                <p className="text-xs text-muted-foreground">{operacao.codigoOperacao}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              A operação será restaurada para o status <strong className="text-foreground">Pré-cadastro</strong> e voltará a aparecer na listagem padrão.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setModalDesarquivar(false)}
+                className="px-4 py-2 rounded-lg text-sm border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => desarquivarMutation.mutate({ id: operacaoId })}
+                disabled={desarquivarMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-50"
+              >
+                {desarquivarMutation.isPending ? "Restaurando..." : "Restaurar Operação"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Arquivar */}
       {modalArquivar && operacao && (

@@ -136,14 +136,11 @@ export const appRouter = router({
         const { eq } = await import("drizzle-orm");
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
-        // Verificar se já existe usuário com esse e-mail
         const existente = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
         if (existente.length > 0) {
           throw new TRPCError({ code: "CONFLICT", message: "Já existe um usuário com este e-mail." });
         }
-        // Gerar token de convite único
         const token = nanoid(32);
-        // Criar usuário com status Convidado (openId temporário até o primeiro login)
         await db.insert(users).values({
           openId: `convite_${token}`,
           name: input.nome,
@@ -152,10 +149,60 @@ export const appRouter = router({
           role: input.perfil === "admin" ? "admin" : "user",
           conviteToken: token,
           conviteStatus: "Convidado",
-          ativo: false, // inativo até aceitar o convite
+          ativo: false,
           lastSignedIn: new Date(),
         });
         return { success: true, token };
+      }),
+
+    ativarConvite: publicProcedure
+      .input(z.object({ token: z.string(), nome: z.string().min(2) }))
+      .mutation(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
+        const [usuario] = await db.select().from(users).where(eq(users.conviteToken, input.token)).limit(1);
+        if (!usuario) throw new TRPCError({ code: "NOT_FOUND", message: "Token de convite inválido ou expirado." });
+        if (usuario.conviteStatus !== "Convidado") throw new TRPCError({ code: "BAD_REQUEST", message: "Este convite já foi utilizado." });
+        await db.update(users).set({
+          name: input.nome,
+          conviteStatus: "Ativo",
+          ativo: true,
+          conviteToken: null,
+        }).where(eq(users.id, usuario.id));
+        return { success: true, email: usuario.email, perfil: usuario.perfil };
+      }),
+
+    obterConvite: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
+        const [usuario] = await db.select({ nome: users.name, email: users.email, perfil: users.perfil, status: users.conviteStatus }).from(users).where(eq(users.conviteToken, input.token)).limit(1);
+        if (!usuario) throw new TRPCError({ code: "NOT_FOUND", message: "Token de convite inválido ou expirado." });
+        if (usuario.status !== "Convidado") throw new TRPCError({ code: "BAD_REQUEST", message: "Este convite já foi utilizado." });
+        return usuario;
+      }),
+
+    revogarConvite: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input }) => {
+        const { getDb } = await import("./db");
+        const { users } = await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível." });
+        const [usuario] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+        if (!usuario) throw new TRPCError({ code: "NOT_FOUND" });
+        if (usuario.conviteStatus !== "Convidado") throw new TRPCError({ code: "BAD_REQUEST", message: "Este usuário não tem convite pendente." });
+        // Hard delete do usuário convidado (ainda não tem dados reais)
+        await db.delete(users).where(eq(users.id, input.userId));
+        return { success: true };
       }),
   }),
 
@@ -386,12 +433,29 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    desarquivar: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const op = await getOperacaoById(input.id);
+        if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+        if (op.statusMacro !== "Arquivada") throw new TRPCError({ code: "BAD_REQUEST", message: "Operação não está arquivada." });
+        // Restaurar para Pré-cadastro
+        await updateOperacao(input.id, { statusMacro: "Pré-cadastro" });
+        await addHistoricoStatus({
+          operacaoId: input.id,
+          statusAnterior: "Arquivada",
+          statusNovo: "Pré-cadastro",
+          alteradoPor: (ctx.user as any).id,
+        });
+        await addLog({ evento: "operacao_desarquivada", detalhe: { id: input.id }, usuarioId: (ctx.user as any).id, operacaoId: input.id });
+        return { success: true };
+      }),
+
     excluir: adminProcedure
       .input(z.object({ id: z.number(), codigoConfirmacao: z.string() }))
       .mutation(async ({ ctx, input }) => {
         const op = await getOperacaoById(input.id);
         if (!op) throw new TRPCError({ code: "NOT_FOUND" });
-        // Valida que o admin digitou o código ATV correto
         if (input.codigoConfirmacao.trim().toUpperCase() !== op.codigoOperacao.trim().toUpperCase()) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Código ATV incorreto. Digite exatamente o código da operação para confirmar." });
         }

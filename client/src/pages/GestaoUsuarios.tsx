@@ -76,6 +76,22 @@ export default function GestaoUsuarios() {
     onError: (e) => toast.error(e.message),
   });
 
+  const revogarConvite = trpc.usuarios.revogarConvite.useMutation({
+    onSuccess: () => { refetch(); toast.success("Convite revogado."); setConfirmRevogar(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [confirmRevogar, setConfirmRevogar] = useState<{ userId: number; nome: string } | null>(null);
+  const [copiadoId, setCopiadoId] = useState<number | null>(null);
+
+  const copiarLinkConvite = (userId: number, token: string) => {
+    const link = `${window.location.origin}/convite?token=${token}`;
+    navigator.clipboard.writeText(link);
+    setCopiadoId(userId);
+    toast.success("Link copiado!");
+    setTimeout(() => setCopiadoId(null), 2000);
+  };
+
   const handleConvidar = () => {
     if (!conviteNome.trim() || !conviteEmail.trim()) {
       toast.error("Preencha nome e e-mail.");
@@ -270,24 +286,51 @@ export default function GestaoUsuarios() {
                       <div className="col-span-2 flex items-center justify-end gap-2">
                         {!isCurrentUser && (
                           <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className={`h-7 w-7 p-0 ${u.ativo ? "text-[#888] hover:text-red-400" : "text-[#888] hover:text-green-400"}`}
-                              onClick={() => setAtivo.mutate({ userId: u.id, ativo: !u.ativo })}
-                              title={u.ativo ? "Desativar usuário" : "Ativar usuário"}
-                            >
-                              {u.ativo ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0 text-[#888] hover:text-red-400"
-                              onClick={() => setConfirmDeletar({ userId: u.id, nome: nomeDisplay })}
-                              title="Remover usuário"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            {(u as any).conviteStatus === "Convidado" ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className={`h-7 px-2 text-xs gap-1 ${copiadoId === u.id ? "text-green-400" : "text-[#888] hover:text-[#C9A84C]"}`}
+                                  onClick={() => copiarLinkConvite(u.id, (u as any).conviteToken ?? "")}
+                                  title="Copiar link de convite"
+                                >
+                                  {copiadoId === u.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                  <span>Copiar</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs gap-1 text-[#888] hover:text-red-400"
+                                  onClick={() => setConfirmRevogar({ userId: u.id, nome: nomeDisplay })}
+                                  title="Revogar convite"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Revogar</span>
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className={`h-7 w-7 p-0 ${u.ativo ? "text-[#888] hover:text-red-400" : "text-[#888] hover:text-green-400"}`}
+                                  onClick={() => setAtivo.mutate({ userId: u.id, ativo: !u.ativo })}
+                                  title={u.ativo ? "Desativar usuário" : "Ativar usuário"}
+                                >
+                                  {u.ativo ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-[#888] hover:text-red-400"
+                                  onClick={() => setConfirmDeletar({ userId: u.id, nome: nomeDisplay })}
+                                  title="Remover usuário"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
@@ -348,6 +391,32 @@ export default function GestaoUsuarios() {
               className="bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
               {deletar.isPending ? "Removendo..." : "Remover"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal confirmar revogar convite */}
+      <Dialog open={!!confirmRevogar} onOpenChange={() => setConfirmRevogar(null)}>
+        <DialogContent className="bg-[#111] border-red-500/30 text-[#FAFAFA] max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Revogar Convite
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[#FAFAFA]">
+            Deseja revogar o convite de <strong>{confirmRevogar?.nome}</strong>?
+          </p>
+          <p className="text-xs text-[#888]">O link de convite será invalidado e o usuário será removido da lista. Esta ação não pode ser desfeita.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmRevogar(null)} className="text-[#888]">Cancelar</Button>
+            <Button
+              onClick={() => confirmRevogar && revogarConvite.mutate({ userId: confirmRevogar.userId })}
+              disabled={revogarConvite.isPending}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              {revogarConvite.isPending ? "Revogando..." : "Revogar Convite"}
             </Button>
           </DialogFooter>
         </DialogContent>

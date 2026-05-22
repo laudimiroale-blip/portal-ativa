@@ -12,6 +12,7 @@ import DetalheOperacao from "./pages/DetalheOperacao";
 import FilaOperacional from "./pages/FilaOperacional";
 import GestaoIFs from "./pages/GestaoIFs";
 import GestaoUsuarios from "./pages/GestaoUsuarios";
+import AtivarConvite from "./pages/AtivarConvite";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/fila" component={FilaOperacional} />
       <Route path="/ifs" component={GestaoIFs} />
       <Route path="/usuarios" component={GestaoUsuarios} />
+      <Route path="/convite" component={AtivarConvite} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
