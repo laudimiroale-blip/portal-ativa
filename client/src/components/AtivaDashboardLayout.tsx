@@ -7,6 +7,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -15,6 +16,7 @@ import {
   LogOut,
   Menu,
   Shield,
+  User,
   Users,
   X,
 } from "lucide-react";
@@ -36,7 +38,8 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Home, hideForAssessor: true },
   { label: "Operações", href: "/operacoes", icon: FolderOpen },
   { label: "Fila Operacional", href: "/fila", icon: BarChart3, adminOnly: true },
-  { label: "Inst. Financeiras", href: "/ifs", icon: Building2, hideForAssessor: true },
+  // Inst. Financeiras e Usuários: apenas para admin
+  { label: "Inst. Financeiras", href: "/ifs", icon: Building2, adminOnly: true },
   { label: "Usuários", href: "/usuarios", icon: Users, adminOnly: true },
 ];
 
@@ -158,6 +161,27 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isAdmin = (user as any)?.perfil === "admin";
+  const perfil: string = isAdmin ? "admin" : ((user as any)?.perfil ?? "assessor");
+
+  // Cores e rótulos por perfil
+  const perfilConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
+    admin:       { label: "Administrador", color: "text-primary",   bg: "bg-primary/20",   border: "border-primary/40" },
+    operacional: { label: "Operacional",   color: "text-blue-400",  bg: "bg-blue-500/20",  border: "border-blue-500/40" },
+    assessor:    { label: "Assessor",      color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/40" },
+  };
+  const pc = perfilConfig[perfil] ?? perfilConfig["assessor"];
+
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   if (loading) {
     return (
@@ -189,14 +213,18 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
         "flex items-center gap-3 px-4 py-5 border-b border-sidebar-border",
         collapsed && "justify-center px-2"
       )}>
-        <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0">
-          <Shield className="w-4 h-4 text-primary" />
+        {/* Avatar dinâmico colorido por perfil */}
+        <div className={cn(
+          "w-8 h-8 rounded-lg border flex items-center justify-center flex-shrink-0",
+          pc.bg, pc.border
+        )}>
+          <Shield className={cn("w-4 h-4", pc.color)} />
         </div>
         {!collapsed && (
           <div>
             <p className="font-bold text-sm text-primary tracking-wider">ATIVA</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-              {isAdmin ? "Administrador" : (user as any)?.perfil === "operacional" ? "Operacional" : "Assessor"}
+            <p className={cn("text-[10px] uppercase tracking-widest font-medium", pc.color)}>
+              {pc.label}
             </p>
           </div>
         )}
@@ -235,36 +263,68 @@ export default function AtivaDashboardLayout({ children }: AtivaDashboardLayoutP
         })}
       </nav>
 
-      {/* User info */}
+      {/* User info com menu suspenso */}
       <div className={cn(
         "border-t border-sidebar-border p-3",
         collapsed && "px-2"
-      )}>
-        {!collapsed && (
-          <div className="flex items-center gap-3 px-2 py-2 mb-2 rounded-md bg-sidebar-accent/50">
-            <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] font-bold text-primary">
-                {user?.name?.charAt(0)?.toUpperCase() || "U"}
-              </span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-foreground truncate">{user?.name || "Usuário"}</p>
-              <p className="text-[10px] text-muted-foreground capitalize">
-                {isAdmin ? "Administrador" : (user as any)?.perfil === "operacional" ? "Operacional" : "Assessor"}
-              </p>
-            </div>
+      )} ref={profileMenuRef}>
+        {!collapsed ? (
+          <div className="relative">
+            {/* Botão do perfil */}
+            <button
+              onClick={() => setProfileMenuOpen((v) => !v)}
+              className="flex items-center gap-3 w-full px-2 py-2 rounded-md bg-sidebar-accent/50 hover:bg-sidebar-accent transition-colors group"
+            >
+              <div className={cn(
+                "w-7 h-7 rounded-full border flex items-center justify-center flex-shrink-0",
+                pc.bg, pc.border
+              )}>
+                <span className={cn("text-[10px] font-bold", pc.color)}>
+                  {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-xs font-medium text-foreground truncate">{user?.name || "Usuário"}</p>
+                <p className={cn("text-[10px] font-medium", pc.color)}>{pc.label}</p>
+              </div>
+              <ChevronDown className={cn(
+                "w-3.5 h-3.5 text-muted-foreground flex-shrink-0 transition-transform duration-150",
+                profileMenuOpen && "rotate-180"
+              )} />
+            </button>
+
+            {/* Menu suspenso */}
+            {profileMenuOpen && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-50">
+                <Link
+                  href="/perfil"
+                  onClick={() => { setProfileMenuOpen(false); setMobileOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground hover:bg-accent transition-colors"
+                >
+                  <User className="w-3.5 h-3.5 text-muted-foreground" />
+                  Meu Perfil
+                </Link>
+                <div className="h-px bg-border" />
+                <button
+                  onClick={() => { setProfileMenuOpen(false); logout(); }}
+                  className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  Sair
+                </button>
+              </div>
+            )}
           </div>
+        ) : (
+          /* Modo colapsado: apenas botão de sair */
+          <button
+            onClick={() => logout()}
+            className="flex items-center justify-center w-full p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            title="Sair"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         )}
-        <button
-          onClick={() => logout()}
-          className={cn(
-            "flex items-center gap-2 w-full px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors",
-            collapsed && "justify-center px-2"
-          )}
-        >
-          <LogOut className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && <span>Sair</span>}
-        </button>
       </div>
     </div>
   );
