@@ -44,6 +44,9 @@ interface DadosCliente {
   nomeCliente: string;
   telefoneTomador: string;
   emailTomador: string;
+  estadoCivil: string;
+  nomeConjuge?: string;
+  cpfConjuge?: string;
 }
 
 interface DadosOperacao {
@@ -92,6 +95,9 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
         nomeCliente: operacaoExistente.nomeCliente ?? "",
         telefoneTomador: operacaoExistente.telefoneTomador ?? "",
         emailTomador: operacaoExistente.emailTomador ?? "",
+        estadoCivil: (operacaoExistente as any).estadoCivil ?? "",
+        nomeConjuge: (operacaoExistente as any).nomeConjuge ?? "",
+        cpfConjuge: (operacaoExistente as any).cpfConjuge ?? "",
       });
       setDadosOperacao({
         produto: (operacaoExistente.produto as DadosOperacao["produto"]) ?? "Home Equity",
@@ -185,16 +191,16 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
               }}
             />
           )}
-          {etapa === 3 && codigoOperacao && (
+          {etapa === 3 && (codigoOperacao || operacaoId) && (
             <Etapa3Documentos
               codigoOperacao={codigoOperacao}
               operacaoId={operacaoId ?? 0}
-              produto={dadosOperacao.produto!}
+              produto={dadosOperacao.produto ?? "Home Equity"}
               onBack={() => setEtapa(2)}
               onNext={() => setEtapa(4)}
             />
           )}
-          {etapa === 4 && codigoOperacao && (
+          {etapa === 4 && (codigoOperacao || operacaoId) && (
             <Etapa4ResumoDefesa
               codigoOperacao={codigoOperacao}
               operacaoId={operacaoId ?? 0}
@@ -203,7 +209,7 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
               onNext={() => setEtapa(5)}
             />
           )}
-          {etapa === 5 && codigoOperacao && (
+          {etapa === 5 && (codigoOperacao || operacaoId) && (
             <Etapa5ScrEnviar
               codigoOperacao={codigoOperacao}
               operacaoId={operacaoId ?? 0}
@@ -236,11 +242,14 @@ function Etapa1DadosCliente({
     if (erros[field]) setErros((e) => ({ ...e, [field]: "" }));
   };
 
+  const exibeConjuge = dados.estadoCivil === "Casado" || dados.estadoCivil === "União Estável";
+
   const validar = () => {
     const e: Record<string, string> = {};
     if (!dados.nomeCliente?.trim() || dados.nomeCliente.trim().length < 2) e.nomeCliente = "Nome obrigatório (mínimo 2 caracteres)";
     if (!dados.telefoneTomador?.trim() || dados.telefoneTomador.replace(/\D/g, "").length < 10) e.telefoneTomador = "Telefone inválido";
     if (!dados.emailTomador?.includes("@")) e.emailTomador = "E-mail inválido";
+    if (!dados.estadoCivil?.trim()) e.estadoCivil = "Estado civil obrigatório";
     setErros(e);
     return Object.keys(e).length === 0;
   };
@@ -250,7 +259,7 @@ function Etapa1DadosCliente({
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-1">Dados do Cliente</h2>
         <p className="text-sm text-muted-foreground">
-          Apenas as informações básicas de contato. CPF, estado civil e demais dados serão extraídos automaticamente pela IA na Etapa 4.
+          Informações básicas de contato e estado civil do tomador.
         </p>
       </div>
 
@@ -283,13 +292,47 @@ function Etapa1DadosCliente({
           error={erros.emailTomador}
           type="email"
         />
-      </div>
 
-      <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
-        <p className="text-xs text-primary/80 flex items-start gap-2">
-          <Bot className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-          CPF, RG, data de nascimento, estado civil e dados do cônjuge serão extraídos automaticamente pela IA a partir dos documentos enviados na Etapa 3.
-        </p>
+        {/* Estado Civil — obrigatório */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">Estado Civil *</label>
+          <Select value={dados.estadoCivil ?? ""} onValueChange={(v) => set("estadoCivil", v)}>
+            <SelectTrigger className={erros.estadoCivil ? "border-red-500" : ""}>
+              <SelectValue placeholder="Selecione o estado civil" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Solteiro">Solteiro(a)</SelectItem>
+              <SelectItem value="Casado">Casado(a)</SelectItem>
+              <SelectItem value="União Estável">União Estável</SelectItem>
+              <SelectItem value="Divorciado">Divorciado(a)</SelectItem>
+              <SelectItem value="Viúvo">Viúvo(a)</SelectItem>
+            </SelectContent>
+          </Select>
+          {erros.estadoCivil && <p className="text-xs text-red-400">{erros.estadoCivil}</p>}
+        </div>
+
+        {/* Campos do cônjuge — apenas para Casado ou União Estável */}
+        {exibeConjuge && (
+          <div className="space-y-4 p-4 bg-muted/20 border border-border/40 rounded-lg">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dados do Cônjuge (opcional)</p>
+            <FieldInput
+              label="Nome do Cônjuge"
+              value={dados.nomeConjuge ?? ""}
+              onChange={(v) => set("nomeConjuge", v)}
+              placeholder="Nome completo do cônjuge"
+            />
+            <FieldInput
+              label="CPF do Cônjuge"
+              value={dados.cpfConjuge ?? ""}
+              onChange={(v) => {
+                const digits = v.replace(/\D/g, "").slice(0, 11);
+                const formatted = digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+                set("cpfConjuge", formatted);
+              }}
+              placeholder="000.000.000-00"
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end">
@@ -346,6 +389,9 @@ function Etapa2DadosOperacao({
         nomeCliente: dadosCliente.nomeCliente!,
         emailTomador: dadosCliente.emailTomador!,
         telefoneTomador: dadosCliente.telefoneTomador!,
+        estadoCivil: dadosCliente.estadoCivil as "Solteiro" | "Casado" | "Divorciado" | "Viúvo" | "União Estável" | undefined,
+        nomeConjuge: dadosCliente.nomeConjuge,
+        cpfConjuge: dadosCliente.cpfConjuge,
         produto: dados.produto!,
         valorSolicitado: dados.valorSolicitado!,
         valorGarantia: dados.valorGarantia,
@@ -568,6 +614,9 @@ function Etapa3Documentos({
   const uploadMutation = trpc.documentos.upload.useMutation();
   const conferirMutation = trpc.ia.conferirDocumentos.useMutation();
   const atualizarMutation = trpc.operacoes.atualizar.useMutation();
+  const naoAplicavelMutation = trpc.documentos.marcarNaoAplicavel.useMutation({
+    onSuccess: () => refetch(),
+  });
 
   const [filaArquivos, setFilaArquivos] = useState<Record<number, ArquivoLocal[]>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -1299,34 +1348,58 @@ function Etapa3Documentos({
           const arquivosDoc = filaArquivos[doc.id] ?? [];
           const temEnviando = arquivosDoc.some((a) => a.status === "enviando");
           const temEnviados = arquivosDoc.filter((a) => a.status === "enviado").length;
-          const isEnviado = doc.estado !== "Pendente";
+          const isNaoAplicavel = (doc as any).naoAplicavel === true;
+          const isOpcional = (doc as any).opcional === true;
+          const isEnviado = doc.estado !== "Pendente" || isNaoAplicavel;
           const docConferencia = null; // análise por documento removida na v2
           return (
             <div
               key={doc.id}
               className={cn(
                 "rounded-lg border transition-colors",
+                isNaoAplicavel ? "border-muted/30 bg-muted/5 opacity-60" :
                 isEnviado ? "border-emerald-500/20 bg-emerald-500/5" : "border-border/40 bg-muted/10 hover:border-primary/30"
               )}
             >
               <div className="flex items-center justify-between p-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  {isEnviado
-                    ? <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    : <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />}
+                  {isNaoAplicavel
+                    ? <span className="w-4 h-4 flex-shrink-0 text-[10px] font-bold text-muted-foreground/50 flex items-center justify-center">N/A</span>
+                    : isEnviado
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      : <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30 flex-shrink-0" />}
                   <div className="min-w-0">
-                    <p className="text-sm text-foreground truncate">{doc.nomeDocumento}</p>
+                    <p className={cn("text-sm truncate", isNaoAplicavel ? "line-through text-muted-foreground/50" : "text-foreground")}>{doc.nomeDocumento}</p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-muted-foreground">{doc.categoria}</p>
+                      {isOpcional && !isNaoAplicavel && <span className="text-[10px] text-amber-400/70 border border-amber-400/30 rounded px-1">Opcional</span>}
+                      {isNaoAplicavel && <span className="text-[10px] text-muted-foreground/50">Não aplicável</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {temEnviados > 0 && (
+                  {temEnviados > 0 && !isNaoAplicavel && (
                     <span className="text-xs text-emerald-400 hidden sm:block">{temEnviados} arquivo{temEnviados > 1 ? "s" : ""}</span>
                   )}
+                  {/* Toggle Não aplicável — apenas para documentos opcionais */}
+                  {isOpcional && (
+                    <Button
+                      size="sm"
+                      variant={isNaoAplicavel ? "default" : "ghost"}
+                      onClick={() => naoAplicavelMutation.mutate({ documentoId: doc.id, naoAplicavel: !isNaoAplicavel })}
+                      disabled={naoAplicavelMutation.isPending}
+                      className={cn(
+                        "gap-1 text-xs h-7 px-2",
+                        isNaoAplicavel ? "bg-muted text-muted-foreground hover:bg-muted/80" : "text-muted-foreground hover:text-foreground"
+                      )}
+                      title={isNaoAplicavel ? "Reativar documento" : "Marcar como Não aplicável"}
+                    >
+                      <span className="hidden sm:inline">{isNaoAplicavel ? "Reativar" : "Não aplicável"}</span>
+                      <span className="sm:hidden">N/A</span>
+                    </Button>
+                  )}
                   {/* Botão Visualizar — aparece quando há arquivo no banco */}
-                  {doc.arquivoUrl && (
+                  {doc.arquivoUrl && !isNaoAplicavel && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -1338,32 +1411,36 @@ function Etapa3Documentos({
                       <span className="hidden sm:inline">Ver</span>
                     </Button>
                   )}
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
-                    multiple
-                    className="hidden"
-                    ref={(el) => { fileInputRefs.current[doc.id] = el; }}
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        handleFilesSelected(doc, e.target.files);
-                      }
-                      e.target.value = "";
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => fileInputRefs.current[doc.id]?.click()}
-                    disabled={temEnviando}
-                    className={cn(
-                      "gap-1.5 text-xs",
-                      isEnviado ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" : ""
-                    )}
-                  >
-                    {temEnviando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                    {isEnviado ? "Substituir" : temEnviados > 0 ? "Adicionar" : "Enviar"}
-                  </Button>
+                  {!isNaoAplicavel && (
+                    <>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
+                        multiple
+                        className="hidden"
+                        ref={(el) => { fileInputRefs.current[doc.id] = el; }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            handleFilesSelected(doc, e.target.files);
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => fileInputRefs.current[doc.id]?.click()}
+                        disabled={temEnviando}
+                        className={cn(
+                          "gap-1.5 text-xs",
+                          isEnviado ? "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" : ""
+                        )}
+                      >
+                        {temEnviando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                        {isEnviado ? "Substituir" : temEnviados > 0 ? "Adicionar" : "Enviar"}
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 

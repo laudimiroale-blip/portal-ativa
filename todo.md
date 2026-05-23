@@ -268,3 +268,14 @@
 - [x] Bug 1: Sanitizar nome do arquivo antes do upload (remover acentos, cedilha, espaços → ASCII)
 - [x] Bug 2: Visualização inline de PDF (iframe) e imagem (img) no modal de preview
 - [x] Bug 3: Retomada de operação na última etapa com progresso salvo ao reabrir wizard
+
+## Bugs e Melhorias — Rodada de Testes (6 itens)
+
+- [x] Bug 1: Upload múltiplo simultâneo na Etapa 3 (atributo multiple no input) — já estava correto; corrigida condição de render das etapas
+- [x] Bug 1: Botão Prosseguir visível quando checklist mínimo completo — corrigida condição `codigoOperacao` nas etapas 3/4/5
+- [x] Bug 2: Validação defensiva no handler de conferência IA (verificar undefined antes de acessar [0])
+- [x] Bug 3: Corrigir fluxo de extração IA na Etapa 4 — procedure reescrita com JSON estruturado e chaves corretas
+- [x] Melhoria 1: Campo Estado Civil obrigatório na Etapa 1 + campos opcionais de cônjuge (Casado/União Estável)
+- [x] Melhoria 1: Documentos do cônjuge no checklist apenas quando Casado ou União Estável
+- [x] Melhoria 2: Unificar RG/CPF/CNH em item único "RG/CPF ou CNH" no checklist (todos os 4 produtos)
+- [x] Melhoria 3: Toggle "Não aplicável" no item Contracheques — 3 meses (CLT) com campos `naoAplicavel` e `opcional` no banco

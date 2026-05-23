@@ -186,6 +186,8 @@ export const documentos = mysqlTable("documentos", {
   versaoAtual: int("versaoAtual").default(1).notNull(),
   enviadoPor: int("enviadoPor"),
   observacao: text("observacao"),
+  naoAplicavel: boolean("naoAplicavel").default(false).notNull(),
+  opcional: boolean("opcional").default(false).notNull(),
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

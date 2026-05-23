@@ -583,6 +583,16 @@ export const appRouter = router({
         return getVersoesDocumento(input.documentoId);
       }),
 
+    marcarNaoAplicavel: protectedProcedure
+      .input(z.object({ documentoId: z.number(), naoAplicavel: z.boolean() }))
+      .mutation(async ({ input }) => {
+        await updateDocumento(input.documentoId, {
+          naoAplicavel: input.naoAplicavel,
+          estado: input.naoAplicavel ? "Pendente" : "Pendente",
+        } as any);
+        return { success: true };
+      }),
+
     complementares: router({
       listar: protectedProcedure
         .input(z.object({ operacaoId: z.number() }))
@@ -1521,33 +1531,69 @@ Analise cada documento enviado abaixo e retorne o JSON completo.`,
         if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
         const docs = await getDocumentosByOperacao(input.operacaoId);
         const docsEnviados = docs.filter((d: any) => d.arquivoUrl);
-        const contentParts: any[] = [
-          { type: "text", text: `Extraia os dados do tomador e da garantia dos documentos da operação ${op.codigoOperacao}.\nCliente: ${op.nomeCliente}, Produto: ${op.produto}\n\nRetorne JSON com:\n{ nome_completo, cpf, rg, data_nascimento, estado_civil, nome_conjuge, cpf_conjuge, profissao, renda_media_mensal, endereco_residencial, matricula_imovel, descricao_imovel, numero_iptu, valor_estimado_imovel, cidade_imovel, estado_imovel, observacoes }\nPara campos não encontrados, use "Informação não localizada automaticamente".` }
-        ];
+
+        if (docsEnviados.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum documento enviado. Envie os documentos na Etapa 3 antes de extrair o perfil." });
+        }
+
+        const buildPublicUrl = (url: string) => {
+          if (!url) return url;
+          if (url.startsWith("/manus-storage/") || url.startsWith("/")) {
+            return `${process.env.BUILT_IN_FORGE_API_URL?.replace("/api", "") ?? ""}${url}`;
+          }
+          return url;
+        };
+
+        const promptText = `Extraia os dados do tomador e da garantia dos documentos da operação ${op.codigoOperacao}.
+Cliente: ${op.nomeCliente} (CPF: ${op.cpf}), Produto: ${op.produto}
+Estado Civil: ${(op as any).estadoCivil ?? "Não informado"}
+Cônjuge: ${(op as any).nomeConjuge ? `${(op as any).nomeConjuge} (CPF: ${(op as any).cpfConjuge})` : "Não informado"}
+
+Retorne JSON ESTRITAMENTE neste formato (use null para campos não encontrados, nunca strings como "Informação não localizada"):
+{
+  "cliente": { "nome_completo": null, "cpf": null, "rg": null, "data_nascimento": null, "estado_civil": null, "telefone": null, "email": null, "endereco_residencial": null, "profissao": null, "empresa": null, "participacao_societaria": null, "patrimonio_aparente": null },
+  "financeiro": { "renda_mensal_estimada": null, "faturamento_mensal": null, "saldo_medio_estimado": null, "movimentacao_financeira": null, "renda_declarada": null, "banco": null },
+  "garantia": { "matricula_imovel": null, "cartorio": null, "iptu": null, "area_total": null, "area_construida": null, "descricao_imovel": null, "onus": null, "alienacao": null, "hipoteca": null, "penhora": null, "liquidez_aparente": null, "hectares": null, "car": null, "marca": null, "modelo": null, "placa": null },
+  "risco": { "perfil_patrimonial": null, "perfil_financeiro": null, "grau_organizacao_documental": null, "aderencia_bancaria_aparente": null, "mitigadores_risco": [], "fragilidades": [] }
+}`;
+
+        const contentParts: any[] = [{ type: "text", text: promptText }];
+
         for (const doc of docsEnviados.slice(0, 10)) {
           if (doc.arquivoUrl) {
-            const url = doc.arquivoUrl.startsWith("/") ? `${process.env.BUILT_IN_FORGE_API_URL?.replace("/api", "") ?? ""}${doc.arquivoUrl}` : doc.arquivoUrl;
-            const ext = (doc.nomeDocumento || "").toLowerCase();
-            if (ext.endsWith(".pdf")) {
+            const url = buildPublicUrl(doc.arquivoUrl);
+            const ext = doc.arquivoUrl.toLowerCase().split("?")[0].split(".").pop() ?? "";
+            if (ext === "pdf") {
               contentParts.push({ type: "file_url", file_url: { url, mime_type: "application/pdf" } });
             } else {
-              contentParts.push({ type: "image_url", image_url: { url, detail: "auto" } });
+              contentParts.push({ type: "image_url", image_url: { url, detail: "high" } });
             }
+            contentParts.push({ type: "text", text: `[Documento: ${doc.nomeDocumento} | Categoria: ${doc.categoria}]` });
           }
         }
+
         try {
           const response = await invokeLLM({
             messages: [
-              { role: "system", content: "Você é um analista de crédito sênior especializado em extração de dados de documentos. Retorne JSON estruturado." },
+              { role: "system", content: "Você é um analista de crédito sênior especializado em extração de dados de documentos. Retorne APENAS JSON válido no formato estruturado solicitado, sem markdown." },
               { role: "user", content: contentParts },
             ],
             response_format: { type: "json_object" } as any,
           });
-          const rawContent = response.choices[0]?.message?.content;
+          if (!response?.choices?.[0]?.message?.content) {
+            throw new Error("Resposta da IA vazia ou inválida");
+          }
+          const rawContent = response.choices[0].message.content;
           const conteudo = typeof rawContent === "string" ? rawContent : "{}";
-          const perfil = JSON.parse(conteudo);
-          await updateOperacao(input.operacaoId, { perfilExtraidoJson: perfil } as any);
-          return { success: true, perfil };
+          const perfilBruto = JSON.parse(conteudo);
+          const perfilEstruturado = {
+            cliente: perfilBruto.cliente ?? perfilBruto,
+            financeiro: perfilBruto.financeiro ?? {},
+            garantia: perfilBruto.garantia ?? {},
+            risco: perfilBruto.risco ?? {},
+          };
+          await updateOperacao(input.operacaoId, { perfilExtraidoJson: perfilEstruturado } as any);
+          return { success: true, perfil: perfilEstruturado };
         } catch (err: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na extração: " + err.message });
         }
@@ -2173,23 +2219,21 @@ async function inicializarChecklist(codigoOperacao: string, produto: string) {
   const op = ops.find((o) => o.codigoOperacao === codigoOperacao);
   if (!op) return;
 
-  const checklistPorProduto: Record<string, { nome: string; categoria: string }[]> = {
+  const checklistPorProduto: Record<string, { nome: string; categoria: string; opcional?: boolean }[]> = {
     "Home Equity": [
-      { nome: "RG ou CNH", categoria: "Pessoal" },
-      { nome: "CPF", categoria: "Pessoal" },
+      { nome: "RG/CPF ou CNH", categoria: "Pessoal" },
       { nome: "Comprovante de residência (até 90 dias)", categoria: "Pessoal" },
       { nome: "IRPF — declaração + recibo", categoria: "Pessoal" },
       { nome: "Certidão de estado civil", categoria: "Pessoal" },
       { nome: "Extratos bancários PF — 3 meses", categoria: "Renda" },
-      { nome: "Contracheques — 3 meses (CLT)", categoria: "Renda" },
+      { nome: "Contracheques — 3 meses (CLT)", categoria: "Renda", opcional: true },
       { nome: "Matrícula atualizada do imóvel", categoria: "Imóvel" },
       { nome: "IPTU com metragem", categoria: "Imóvel" },
       { nome: "Fotos do imóvel (frente/fundos/lateral/interna)", categoria: "Imóvel" },
       { nome: "Escritura (se disponível)", categoria: "Imóvel" },
     ],
     "Auto Equity": [
-      { nome: "RG ou CNH", categoria: "Pessoal" },
-      { nome: "CPF", categoria: "Pessoal" },
+      { nome: "RG/CPF ou CNH", categoria: "Pessoal" },
       { nome: "Comprovante de residência (até 90 dias)", categoria: "Pessoal" },
       { nome: "IRPF — declaração + recibo", categoria: "Pessoal" },
       { nome: "Certidão de estado civil", categoria: "Pessoal" },
@@ -2199,8 +2243,7 @@ async function inicializarChecklist(codigoOperacao: string, produto: string) {
       { nome: "Comprovante de quitação ou extrato de financiamento", categoria: "Veículo" },
     ],
     "Rural Equity": [
-      { nome: "RG ou CNH", categoria: "Pessoal" },
-      { nome: "CPF", categoria: "Pessoal" },
+      { nome: "RG/CPF ou CNH", categoria: "Pessoal" },
       { nome: "Comprovante de residência (até 90 dias)", categoria: "Pessoal" },
       { nome: "IRPF com atividade rural", categoria: "Pessoal" },
       { nome: "Certidão de estado civil", categoria: "Pessoal" },
@@ -2215,12 +2258,12 @@ async function inicializarChecklist(codigoOperacao: string, produto: string) {
       { nome: "Fotos da propriedade e atividade produtiva", categoria: "Imóvel Rural" },
     ],
     "Imóvel em Construção": [
-      { nome: "RG ou CNH", categoria: "Pessoal" },
-      { nome: "CPF", categoria: "Pessoal" },
+      { nome: "RG/CPF ou CNH", categoria: "Pessoal" },
       { nome: "Comprovante de residência (até 90 dias)", categoria: "Pessoal" },
       { nome: "IRPF — declaração + recibo", categoria: "Pessoal" },
       { nome: "Certidão de estado civil", categoria: "Pessoal" },
       { nome: "Extratos bancários PF — 3 meses", categoria: "Renda" },
+      { nome: "Contracheques — 3 meses (CLT)", categoria: "Renda", opcional: true },
       { nome: "Matrícula do terreno", categoria: "Obra" },
       { nome: "Alvará vigente", categoria: "Obra" },
       { nome: "Projeto aprovado pela prefeitura", categoria: "Obra" },
@@ -2239,6 +2282,7 @@ async function inicializarChecklist(codigoOperacao: string, produto: string) {
       categoria: item.categoria,
       estado: "Pendente",
       versaoAtual: 1,
-    });
+      opcional: item.opcional ?? false,
+    } as any);
   }
 }
