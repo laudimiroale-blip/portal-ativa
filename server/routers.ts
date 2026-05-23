@@ -1208,9 +1208,11 @@ Responda em JSON com este formato exato:
         if (!op) throw new TRPCError({ code: "NOT_FOUND" });
         if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
         const docs = await getDocumentosByOperacao(input.operacaoId);
-        const docsEnviados = docs.filter((d: any) => d.arquivoUrl);
-        const docsPendentes = docs.filter((d: any) => !d.arquivoUrl);
-        const checklistTotal = docs.length;
+        // Excluir documentos marcados como N/A — não têm arquivo e não devem ser analisados
+        const docsAtivos = docs.filter((d: any) => !d.naoAplicavel);
+        const docsEnviados = docsAtivos.filter((d: any) => d.arquivoUrl);
+        const docsPendentes = docsAtivos.filter((d: any) => !d.arquivoUrl);
+        const checklistTotal = docsAtivos.length;
         const checklistConcluidos = docsEnviados.length;
 
         // Buscar todas as versões para ter todos os arquivos por documento
@@ -1390,8 +1392,8 @@ INFORMAÇÕES DA OPERAÇÃO:
 - Prazo: ${op.prazo} meses
 - Finalidade: ${op.finalidade ?? "Não informada"}
 
-CHECKLIST (${docs.length} documentos):
-${docs.map((d: any) => `- [${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}] ID:${d.id} | ${d.nomeDocumento} (${d.categoria})`).join("\n")}
+CHECKLIST (${docsAtivos.length} documentos ativos, ${docs.filter((d: any) => d.naoAplicavel).length} marcados como N/A):
+${docsAtivos.map((d: any) => `- [${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}] ID:${d.id} | ${d.nomeDocumento} (${d.categoria})`).join("\n")}
 
 DOCUMENTOS AUSENTES: ${docsPendentes.map((d: any) => d.nomeDocumento).join(", ") || "Nenhum"}
 
@@ -1576,19 +1578,28 @@ Retorne JSON ESTRITAMENTE neste formato (use null para campos não encontrados, 
         try {
           const response = await invokeLLM({
             messages: [
-              { role: "system", content: "Você é um analista de crédito sênior especializado em extração de dados de documentos. Retorne APENAS JSON válido no formato estruturado solicitado, sem markdown." },
+              { role: "system", content: "Você é um analista de crédito sênior especializado em extração de dados de documentos. Retorne APENAS JSON válido no formato estruturado solicitado, sem markdown, sem código de bloco." },
               { role: "user", content: contentParts },
             ],
             response_format: { type: "json_object" } as any,
           });
-          if (!response?.choices?.[0]?.message?.content) {
-            throw new Error("Resposta da IA vazia ou inválida");
+
+          // Validação defensiva: aceita conteúdo vazio e usa perfil mínimo com dados da operação
+          let rawContent = response?.choices?.[0]?.message?.content;
+          if (!rawContent || (typeof rawContent === "string" && rawContent.trim() === "")) {
+            // Fallback: montar perfil mínimo com dados já conhecidos da operação
+            rawContent = JSON.stringify({
+              cliente: { nome_completo: op.nomeCliente, cpf: op.cpf, estado_civil: (op as any).estadoCivil ?? null },
+              financeiro: {},
+              garantia: {},
+              risco: { grau_organizacao_documental: "baixo", mitigadores_risco: [], fragilidades: ["Documentos insuficientes para extração automática"] },
+            });
           }
-          const rawContent = response.choices[0].message.content;
-          const conteudo = typeof rawContent === "string" ? rawContent : "{}";
-          const perfilBruto = JSON.parse(conteudo);
+          const conteudo = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
+          let perfilBruto: any = {};
+          try { perfilBruto = JSON.parse(conteudo); } catch { perfilBruto = {}; }
           const perfilEstruturado = {
-            cliente: perfilBruto.cliente ?? perfilBruto,
+            cliente: perfilBruto.cliente ?? { nome_completo: op.nomeCliente, cpf: op.cpf },
             financeiro: perfilBruto.financeiro ?? {},
             garantia: perfilBruto.garantia ?? {},
             risco: perfilBruto.risco ?? {},

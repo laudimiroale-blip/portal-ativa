@@ -412,14 +412,24 @@ export default function FilaOperacional() {
 
   const slaIds = useMemo(() => new Set(slaAlerts?.map((a) => a.id) ?? []), [slaAlerts]);
 
+  // Busca local em tempo real (oculta cards sem remover das colunas)
+  const [buscaLocal, setBuscaLocal] = useState("");
+  const termoBuscaLocal = buscaLocal.toLowerCase().trim();
+
   // Agrupar operações por coluna
   const colunas = useMemo(() => {
     const ops = operacoesRaw ?? [];
     return KANBAN_COLUNAS.map((col) => ({
       ...col,
-      operacoes: ops.filter((op) => col.statuses.includes(op.statusMacro)),
+      operacoes: ops.filter((op) => {
+        if (!col.statuses.includes(op.statusMacro)) return false;
+        if (!termoBuscaLocal) return true;
+        const nome = (op.nomeCliente ?? "").toLowerCase();
+        const codigo = (op.codigoOperacao ?? "").toLowerCase();
+        return nome.includes(termoBuscaLocal) || codigo.includes(termoBuscaLocal);
+      }),
     }));
-  }, [operacoesRaw]);
+  }, [operacoesRaw, termoBuscaLocal]);
 
   // Drag-and-drop handlers
   const handleDragStart = useCallback((e: React.DragEvent, opId: number) => {
@@ -476,6 +486,7 @@ export default function FilaOperacional() {
 
   const limparFiltros = () => {
     setBusca("");
+    setBuscaLocal("");
     setFiltroProduto("todos");
     setFiltroPrioridade("todas");
     setFiltroConsultor("todos");
@@ -483,7 +494,7 @@ export default function FilaOperacional() {
   };
 
   const temFiltrosAtivos =
-    busca || filtroProduto !== "todos" || filtroPrioridade !== "todas" || filtroConsultor !== "todos" || filtroStatus !== "todos";
+    busca || buscaLocal || filtroProduto !== "todos" || filtroPrioridade !== "todas" || filtroConsultor !== "todos" || filtroStatus !== "todos";
 
   const totalOperacoes = operacoesRaw?.length ?? 0;
 
@@ -514,19 +525,20 @@ export default function FilaOperacional() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Busca rápida */}
+            {/* Busca em tempo real — filtra cards localmente por nome ou código ATV */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-primary/60" />
               <Input
-                placeholder="Buscar por nome ou código..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="pl-8 h-8 text-xs w-52 bg-background/60"
+                placeholder="Buscar por nome ou código ATV..."
+                value={buscaLocal}
+                onChange={(e) => setBuscaLocal(e.target.value)}
+                className="pl-8 h-8 text-xs w-64 bg-background/60 border-primary/20 focus:border-primary/50"
               />
-              {busca && (
+              {buscaLocal && (
                 <button
-                  onClick={() => setBusca("")}
+                  onClick={() => setBuscaLocal("")}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  title="Limpar busca"
                 >
                   <X className="w-3 h-3" />
                 </button>

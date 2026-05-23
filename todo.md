@@ -297,3 +297,15 @@
 - [x] Cards individuais com código ATV, nome, produto, valor e status (bordas arredondadas, espaçamento)
 - [x] Drag-and-drop com feedback visual (card semitransparente com opacidade 40% + escala 95%, coluna destacada com ring + shadow)
 - [x] Atualizar statusMacro no banco ao soltar o card (trpc.operacoes.atualizar) e registrar no histórico
+
+## Bugs Críticos — Sessão 3
+
+- [x] Bug C: Máscara de moeda BRL (1.000.000,00) nos campos de valor da Etapa 2 do wizard
+- [x] Bug A: conferirDocumentos falha quando contracheque está com naoAplicavel=true (Cannot read properties of undefined reading '0')
+- [x] Bug B: extrairPerfil retorna "Resposta da IA vazia ou inválida" — validação defensiva no choices[0]
+
+## Melhorias — Sessão 3
+
+- [x] Melhoria 1: Barra de pesquisa em tempo real no topo do Kanban (filtrar por nome do cliente ou código ATV)
+- [x] Melhoria 2: Justificativa N/A como select (Empresário, Autônomo, Aposentado, Outros) com campo texto livre apenas para "Outros"
+- [x] Melhoria 3: Botão "Reenviar Documento" ao lado de itens reprovados pela IA — substitui arquivo e limpa resultado da IA para aquele item

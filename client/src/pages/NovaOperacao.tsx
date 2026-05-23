@@ -424,6 +424,18 @@ function Etapa2DadosOperacao({
     }
   };
 
+  // Formata número para moeda BRL: 1000000 → 1.000.000,00
+  const formatMoney = (v: string): string => {
+    const digits = v.replace(/\D/g, "");
+    if (!digits) return "";
+    const num = parseInt(digits, 10);
+    return (num / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const handleMoneyChange = (field: "valorSolicitado" | "valorGarantia", raw: string) => {
+    set(field, formatMoney(raw));
+  };
+
   // Normaliza valor monetário para cálculo de LTV (suporta 1.000.000,00 e 1000000)
   const parseLTV = (v?: string): number => {
     if (!v) return 0;
@@ -464,16 +476,16 @@ function Etapa2DadosOperacao({
         <FieldInput
           label="Valor Solicitado (R$) *"
           value={dados.valorSolicitado ?? ""}
-          onChange={(v) => set("valorSolicitado", v.replace(/[^\d.,]/g, ""))}
-          placeholder="Ex: 250000"
+          onChange={(v) => handleMoneyChange("valorSolicitado", v)}
+          placeholder="Ex: 250.000,00"
           error={erros.valorSolicitado}
         />
 
         <FieldInput
           label="Valor Aproximado da Garantia (R$) *"
           value={dados.valorGarantia ?? ""}
-          onChange={(v) => set("valorGarantia", v.replace(/[^\d.,]/g, ""))}
-          placeholder="Ex: 500000"
+          onChange={(v) => handleMoneyChange("valorGarantia", v)}
+          placeholder="Ex: 500.000,00"
           error={erros.valorGarantia}
         />
 
@@ -623,6 +635,7 @@ function Etapa3Documentos({
 
   const [filaArquivos, setFilaArquivos] = useState<Record<number, ArquivoLocal[]>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const reenviarInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   // Estado para justificativa do toggle Não aplicável
   const [justificativaNaoAplicavel, setJustificativaNaoAplicavel] = useState<Record<number, string>>({});
   const [mostrarJustificativa, setMostrarJustificativa] = useState<Record<number, boolean>>({});
@@ -1445,6 +1458,42 @@ function Etapa3Documentos({
                       <span className="hidden sm:inline">Ver</span>
                     </Button>
                   )}
+                  {/* Botão Reenviar — aparece apenas quando a IA reprovou o item */}
+                  {isDocInvalidoIA && !isNaoAplicavel && (
+                    <>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
+                        className="hidden"
+                        ref={(el) => { reenviarInputRefs.current[doc.id] = el; }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            // Limpar resultado da IA para este documento e fazer upload
+                            setResultadoConferencia((prev) =>
+                              prev ? {
+                                ...prev,
+                                documentosPorStatus: prev.documentosPorStatus.filter((d) => d.id !== doc.id),
+                              } : prev
+                            );
+                            handleFilesSelected(doc, e.target.files!);
+                            toast.info(`Reenvio de "${doc.nomeDocumento}" iniciado. Confira a documentação novamente após o upload.`);
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => reenviarInputRefs.current[doc.id]?.click()}
+                        disabled={temEnviando}
+                        className="gap-1 text-xs border-orange-500/40 text-orange-400 hover:bg-orange-500/10 h-7 px-2"
+                        title="Substituir este arquivo e limpar resultado da IA"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span className="hidden sm:inline">Reenviar</span>
+                      </Button>
+                    </>
+                  )}
                   {!isNaoAplicavel && (
                     <>
                       <input
@@ -1481,40 +1530,66 @@ function Etapa3Documentos({
               {/* Campo de justificativa para Não aplicável */}
               {mostrarJustificativa[doc.id] && !isNaoAplicavel && (
                 <div className="px-3 pb-3 space-y-2">
-                  <p className="text-xs text-muted-foreground">Motivo (opcional — ex: empresário, autônomo, aposentado):</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={justificativaNaoAplicavel[doc.id] ?? ""}
-                      onChange={(e) => setJustificativaNaoAplicavel((prev) => ({ ...prev, [doc.id]: e.target.value }))}
-                      placeholder="Ex: cliente é empresário, sem vínculo CLT"
-                      className="flex-1 text-xs bg-background border border-border/40 rounded px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
-                      maxLength={120}
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        naoAplicavelMutation.mutate({
-                          documentoId: doc.id,
-                          naoAplicavel: true,
-                          observacao: justificativaNaoAplicavel[doc.id] ?? "",
-                        });
-                        setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: false }));
+                  <p className="text-xs text-muted-foreground font-medium">Motivo pelo qual o contracheque não se aplica:</p>
+                  <div className="space-y-2">
+                    <Select
+                      value={justificativaNaoAplicavel[doc.id]?.startsWith("Outros:") ? "Outros" : (justificativaNaoAplicavel[doc.id] ?? "")}
+                      onValueChange={(v) => {
+                        if (v !== "Outros") {
+                          setJustificativaNaoAplicavel((prev) => ({ ...prev, [doc.id]: v }));
+                        } else {
+                          setJustificativaNaoAplicavel((prev) => ({ ...prev, [doc.id]: "Outros: " }));
+                        }
                       }}
-                      disabled={naoAplicavelMutation.isPending}
-                      className="text-xs h-7 px-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
                     >
-                      Confirmar N/A
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: false }))}
-                      className="text-xs h-7 px-2 text-muted-foreground"
-                    >
-                      Cancelar
-                    </Button>
+                      <SelectTrigger className="h-8 text-xs bg-background/50">
+                        <SelectValue placeholder="Selecione o motivo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Empresário">Empresário</SelectItem>
+                        <SelectItem value="Autônomo">Autônomo</SelectItem>
+                        <SelectItem value="Aposentado">Aposentado</SelectItem>
+                        <SelectItem value="Outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(justificativaNaoAplicavel[doc.id] === "Outros" || justificativaNaoAplicavel[doc.id]?.startsWith("Outros:")) && (
+                      <input
+                        type="text"
+                        value={justificativaNaoAplicavel[doc.id]?.replace(/^Outros:\s*/, "") ?? ""}
+                        onChange={(e) => setJustificativaNaoAplicavel((prev) => ({ ...prev, [doc.id]: `Outros: ${e.target.value}` }))}
+                        placeholder="Descreva o motivo..."
+                        className="w-full text-xs bg-background border border-border/40 rounded px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                        maxLength={120}
+                        autoFocus
+                      />
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const motivo = justificativaNaoAplicavel[doc.id] ?? "";
+                          naoAplicavelMutation.mutate({
+                            documentoId: doc.id,
+                            naoAplicavel: true,
+                            observacao: motivo,
+                          });
+                          setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: false }));
+                        }}
+                        disabled={naoAplicavelMutation.isPending || !justificativaNaoAplicavel[doc.id]}
+                        className="text-xs h-7 px-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                      >
+                        Confirmar N/A
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: false }))}
+                        className="text-xs h-7 px-2 text-muted-foreground"
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
