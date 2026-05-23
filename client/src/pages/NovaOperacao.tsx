@@ -605,7 +605,10 @@ function Etapa3Documentos({
   onNext: () => void;
 }) {
   const { data: ops } = trpc.operacoes.listar.useQuery({ busca: codigoOperacao });
-  const operacaoId = ops?.find((o) => o.codigoOperacao === codigoOperacao)?.id ?? operacaoIdProp;
+  const opAtual = ops?.find((o) => o.codigoOperacao === codigoOperacao);
+  const operacaoId = opAtual?.id ?? operacaoIdProp;
+  const estadoCivilOp = (opAtual as any)?.estadoCivil ?? "";
+  const exigeConjuge = estadoCivilOp === "Casado" || estadoCivilOp === "União Estável";
 
   const { data: documentos, refetch } = trpc.documentos.listar.useQuery(
     { operacaoId: operacaoId! },
@@ -620,6 +623,9 @@ function Etapa3Documentos({
 
   const [filaArquivos, setFilaArquivos] = useState<Record<number, ArquivoLocal[]>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  // Estado para justificativa do toggle Não aplicável
+  const [justificativaNaoAplicavel, setJustificativaNaoAplicavel] = useState<Record<number, string>>({});
+  const [mostrarJustificativa, setMostrarJustificativa] = useState<Record<number, boolean>>({});
   type DocStatus = {
     id: number;
     nome: string;
@@ -1351,7 +1357,9 @@ function Etapa3Documentos({
           const isNaoAplicavel = (doc as any).naoAplicavel === true;
           const isOpcional = (doc as any).opcional === true;
           const isEnviado = doc.estado !== "Pendente" || isNaoAplicavel;
-          const docConferencia = null; // análise por documento removida na v2
+          const docConferencia = resultadoConferencia?.documentosPorStatus?.find((d) => d.id === doc.id) ?? null;
+          const isDocConjuge = doc.nomeDocumento.toLowerCase().includes("cônjuge") || doc.nomeDocumento.toLowerCase().includes("conjuge");
+          const isDocInvalidoIA = docConferencia && (docConferencia.semaforo === "vermelho" || docConferencia.semaforo === "amarelo");
           return (
             <div
               key={doc.id}
@@ -1373,9 +1381,25 @@ function Etapa3Documentos({
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-muted-foreground">{doc.categoria}</p>
                       {isOpcional && !isNaoAplicavel && <span className="text-[10px] text-amber-400/70 border border-amber-400/30 rounded px-1">Opcional</span>}
-                      {isNaoAplicavel && <span className="text-[10px] text-muted-foreground/50">Não aplicável</span>}
-                    </div>
+                  {isNaoAplicavel && <span className="text-[10px] text-muted-foreground/50">Não aplicável</span>}
+                  {isDocConjuge && exigeConjuge && !isNaoAplicavel && (
+                    <span className="text-[10px] text-blue-400/80 border border-blue-400/30 rounded px-1" title="Exigido pelo estado civil declarado">
+                      Exigido pelo estado civil
+                    </span>
+                  )}
+                  {isDocInvalidoIA && (
+                    <span className={cn(
+                      "text-[10px] font-medium border rounded px-1 flex items-center gap-0.5",
+                      docConferencia!.semaforo === "vermelho"
+                        ? "text-red-400 border-red-400/30"
+                        : "text-yellow-400 border-yellow-400/30"
+                    )}>
+                      {docConferencia!.semaforo === "vermelho" ? "❌" : "⚠️"}
+                      {docConferencia!.semaforo === "vermelho" ? "Inválido" : "Ressalva"}
+                    </span>
+                  )}
                   </div>
+                </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {temEnviados > 0 && !isNaoAplicavel && (
@@ -1386,7 +1410,17 @@ function Etapa3Documentos({
                     <Button
                       size="sm"
                       variant={isNaoAplicavel ? "default" : "ghost"}
-                      onClick={() => naoAplicavelMutation.mutate({ documentoId: doc.id, naoAplicavel: !isNaoAplicavel })}
+                      onClick={() => {
+                        if (!isNaoAplicavel) {
+                          // Ao ativar N/A, mostrar campo de justificativa
+                          setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: true }));
+                        } else {
+                          // Ao desativar, limpar justificativa e reativar
+                          setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: false }));
+                          setJustificativaNaoAplicavel((prev) => ({ ...prev, [doc.id]: "" }));
+                          naoAplicavelMutation.mutate({ documentoId: doc.id, naoAplicavel: false });
+                        }
+                      }}
                       disabled={naoAplicavelMutation.isPending}
                       className={cn(
                         "gap-1 text-xs h-7 px-2",
@@ -1444,6 +1478,46 @@ function Etapa3Documentos({
                 </div>
               </div>
 
+              {/* Campo de justificativa para Não aplicável */}
+              {mostrarJustificativa[doc.id] && !isNaoAplicavel && (
+                <div className="px-3 pb-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">Motivo (opcional — ex: empresário, autônomo, aposentado):</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={justificativaNaoAplicavel[doc.id] ?? ""}
+                      onChange={(e) => setJustificativaNaoAplicavel((prev) => ({ ...prev, [doc.id]: e.target.value }))}
+                      placeholder="Ex: cliente é empresário, sem vínculo CLT"
+                      className="flex-1 text-xs bg-background border border-border/40 rounded px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      maxLength={120}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        naoAplicavelMutation.mutate({
+                          documentoId: doc.id,
+                          naoAplicavel: true,
+                          observacao: justificativaNaoAplicavel[doc.id] ?? "",
+                        });
+                        setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: false }));
+                      }}
+                      disabled={naoAplicavelMutation.isPending}
+                      className="text-xs h-7 px-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                    >
+                      Confirmar N/A
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setMostrarJustificativa((prev) => ({ ...prev, [doc.id]: false }))}
+                      className="text-xs h-7 px-2 text-muted-foreground"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
               {arquivosDoc.length > 0 && (
                 <div className="px-3 pb-3 space-y-1.5">
                   <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Arquivos enviados</p>

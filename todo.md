@@ -279,3 +279,21 @@
 - [x] Melhoria 1: Documentos do cônjuge no checklist apenas quando Casado ou União Estável
 - [x] Melhoria 2: Unificar RG/CPF/CNH em item único "RG/CPF ou CNH" no checklist (todos os 4 produtos)
 - [x] Melhoria 3: Toggle "Não aplicável" no item Contracheques — 3 meses (CLT) com campos `naoAplicavel` e `opcional` no banco
+
+## Melhorias — Checklist, IFs e Kanban
+
+### Checklist de Documentos
+- [x] Alerta visual/tooltip no checklist explicando que documentos do cônjuge são exigidos pelo estado civil
+- [x] Destaque visual (ícone de aviso) nos itens que a IA identificou como ausentes ou inválidos
+- [x] Campo de justificativa opcional ao marcar contracheque como "Não aplicável"
+
+### IFs — Excluir Produto
+- [x] Botão "Excluir" ao lado de "Configurar" em cada produto da aba Condições por Produto
+- [x] Se sem condições: excluir diretamente; se com condições: modal de confirmação
+- [x] Apenas Administrador pode excluir produtos de uma IF
+
+### Kanban — Fila Operacional
+- [x] Scroll horizontal com largura mínima de 260px por coluna (flex-shrink-0)
+- [x] Cards individuais com código ATV, nome, produto, valor e status (bordas arredondadas, espaçamento)
+- [x] Drag-and-drop com feedback visual (card semitransparente com opacidade 40% + escala 95%, coluna destacada com ring + shadow)
+- [x] Atualizar statusMacro no banco ao soltar o card (trpc.operacoes.atualizar) e registrar no histórico

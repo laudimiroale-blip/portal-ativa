@@ -144,11 +144,12 @@ const COLUNA_STATUS_PRINCIPAL: Record<string, string> = {
 interface KanbanCardProps {
   op: any;
   isSlaAlert: boolean;
+  isDragging: boolean;
   onDragStart: (e: React.DragEvent, opId: number) => void;
   onDragEnd: (e: React.DragEvent) => void;
 }
 
-function KanbanCard({ op, isSlaAlert, onDragStart, onDragEnd }: KanbanCardProps) {
+function KanbanCard({ op, isSlaAlert, isDragging, onDragStart, onDragEnd }: KanbanCardProps) {
   const valorFormatado = op.valorSolicitado
     ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(
         Number(op.valorSolicitado)
@@ -287,6 +288,7 @@ interface KanbanColunaProps {
   operacoes: any[];
   slaIds: Set<number>;
   isDragOver: boolean;
+  draggingId: number | null;
   onDragStart: (e: React.DragEvent, opId: number) => void;
   onDragEnd: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent, colunaId: string) => void;
@@ -299,6 +301,7 @@ function KanbanColunaComponent({
   operacoes,
   slaIds,
   isDragOver,
+  draggingId,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -308,7 +311,7 @@ function KanbanColunaComponent({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-xl border transition-all min-w-[240px] max-w-[280px] w-full",
+        "flex flex-col rounded-xl border transition-all min-w-[260px] w-[260px] flex-shrink-0",
         coluna.corBorda,
         isDragOver ? "ring-2 ring-primary/40 bg-primary/5 scale-[1.01]" : coluna.cor
       )}
@@ -353,6 +356,7 @@ function KanbanColunaComponent({
               key={op.id}
               op={op}
               isSlaAlert={slaIds.has(op.id)}
+              isDragging={draggingId === op.id}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
             />
@@ -676,11 +680,11 @@ export default function FilaOperacional() {
         {isLoading ? (
           <div className="flex gap-3 overflow-x-auto pb-4">
             {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="min-w-[240px] h-64 bg-muted/20 rounded-xl animate-pulse flex-shrink-0" />
+              <div key={i} className="min-w-[260px] w-[260px] h-64 bg-muted/20 rounded-xl animate-pulse flex-shrink-0" />
             ))}
           </div>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-4 flex-1">
+          <div className="flex gap-3 overflow-x-auto pb-4 flex-1" style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--border)) transparent' }}>
             {colunas.map((col) => (
               <KanbanColunaComponent
                 key={col.id}
@@ -688,6 +692,7 @@ export default function FilaOperacional() {
                 operacoes={col.operacoes}
                 slaIds={slaIds}
                 isDragOver={dragOverColuna === col.id}
+                draggingId={draggingId}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 onDragOver={handleDragOver}

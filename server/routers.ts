@@ -584,11 +584,12 @@ export const appRouter = router({
       }),
 
     marcarNaoAplicavel: protectedProcedure
-      .input(z.object({ documentoId: z.number(), naoAplicavel: z.boolean() }))
+      .input(z.object({ documentoId: z.number(), naoAplicavel: z.boolean(), observacao: z.string().optional() }))
       .mutation(async ({ input }) => {
         await updateDocumento(input.documentoId, {
           naoAplicavel: input.naoAplicavel,
-          estado: input.naoAplicavel ? "Pendente" : "Pendente",
+          estado: "Pendente",
+          ...(input.observacao !== undefined ? { observacao: input.observacao } : {}),
         } as any);
         return { success: true };
       }),

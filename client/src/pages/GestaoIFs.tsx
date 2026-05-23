@@ -173,6 +173,8 @@ function CondicoesProduto({ ifId, isAdmin }: { ifId: number; isAdmin: boolean })
 
   const [editando, setEditando] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Condicao>>({});
+  const [excluindoProduto, setExcluindoProduto] = useState<string | null>(null);
+  const [produtosOcultos, setProdutosOcultos] = useState<string[]>([]);
 
   const iniciarEdicao = (produto: string) => {
     const existing = condicoes?.find((c) => c.produto === produto);
@@ -199,7 +201,7 @@ function CondicoesProduto({ ifId, isAdmin }: { ifId: number; isAdmin: boolean })
 
   return (
     <div className="space-y-3">
-      {PRODUTOS.map((produto) => {
+      {PRODUTOS.filter((p) => !produtosOcultos.includes(p)).map((produto) => {
         const cond = condicoes?.find((c) => c.produto === produto);
         return (
           <div key={produto} className="border border-[#C9A84C]/20 rounded-lg p-3 bg-[#111]">
@@ -211,11 +213,23 @@ function CondicoesProduto({ ifId, isAdmin }: { ifId: number; isAdmin: boolean })
                     <Edit className="w-3 h-3 mr-1" />
                     {cond ? "Editar" : "Configurar"}
                   </Button>
-                  {cond && (
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-red-400 hover:bg-red-500/10" onClick={() => deletarCondicao.mutate({ id: cond.id })}>
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  )}
+                  {/* Botão Excluir produto */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-red-400 hover:bg-red-500/10"
+                    title={cond ? "Excluir produto e condições" : "Remover produto desta IF"}
+                    onClick={() => {
+                      if (cond) {
+                        setExcluindoProduto(produto);
+                      } else {
+                        setProdutosOcultos((prev) => [...prev, produto]);
+                        toast.success(`Produto "${produto}" removido desta IF.`);
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
                 </div>
               )}
             </div>
@@ -235,6 +249,36 @@ function CondicoesProduto({ ifId, isAdmin }: { ifId: number; isAdmin: boolean })
           </div>
         );
       })}
+
+      {/* Modal de confirmação: excluir produto com condições */}
+      <Dialog open={!!excluindoProduto} onOpenChange={() => setExcluindoProduto(null)}>
+        <DialogContent className="bg-[#111] border-[#C9A84C]/30 text-[#FAFAFA] max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-red-400">Excluir produto</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[#FAFAFA]/80">
+            O produto <strong className="text-[#FAFAFA]">{excluindoProduto}</strong> possui condições cadastradas.
+            Ao excluir, todas as condições serão perdidas permanentemente.
+          </p>
+          <p className="text-xs text-red-400/80">Esta ação não pode ser desfeita.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExcluindoProduto(null)} className="text-[#888]">Cancelar</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const cond = condicoes?.find((c) => c.produto === excluindoProduto);
+                if (cond) deletarCondicao.mutate({ id: cond.id });
+                setProdutosOcultos((prev) => [...prev, excluindoProduto!]);
+                setExcluindoProduto(null);
+                toast.success(`Produto "${excluindoProduto}" e suas condições foram removidos.`);
+              }}
+              disabled={deletarCondicao.isPending}
+            >
+              Excluir permanentemente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de edição de condição */}
       <Dialog open={!!editando} onOpenChange={() => setEditando(null)}>
