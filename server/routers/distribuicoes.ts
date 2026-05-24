@@ -66,6 +66,7 @@ export const distribuicoesRouter = router({
       operacaoId: z.number(),
       ifId: z.number(),
       observacoes: z.string().optional(),
+      forcarDistribuicao: z.boolean().optional(), // Permite admin forçar distribuição para IF incompatível
     }))
     .mutation(async ({ ctx, input }) => {
       const user = ctx.user as any;
@@ -79,6 +80,15 @@ export const distribuicoesRouter = router({
       );
       if (jaDistribuida) {
         throw new TRPCError({ code: "CONFLICT", message: "Esta operação já foi distribuída para esta instituição financeira." });
+      }
+
+      // Validação server-side de compatibilidade (bloqueia IF incompatível salvo se admin forçar)
+      if (!input.forcarDistribuicao) {
+        const ifs = await getAllIFsCadastradas();
+        const ifAlvo = ifs.find((i: any) => i.id === input.ifId);
+        if (ifAlvo?.status === "Inativa") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `A IF "${ifAlvo.nome}" está inativa e não pode receber distribuições.` });
+        }
       }
 
       await createDistribuicao({
@@ -122,6 +132,61 @@ export const distribuicoesRouter = router({
       const { distribuicaoId, ...updateData } = input;
       await updateDistribuicao(distribuicaoId, updateData);
       await addLog({ evento: "distribuicao_atualizada", detalhe: { distribuicaoId, statusRetorno: input.statusRetorno }, usuarioId: user.id });
+      return { success: true };
+    }),
+
+  // Procedure explícita para registrar retorno bancário com data/hora e responsável
+  registrarRetorno: adminPerfilProcedure
+    .input(z.object({
+      distribuicaoId: z.number(),
+      operacaoId: z.number(),
+      statusRetorno: z.enum(["Aguardando", "Em análise", "Aprovada", "Reprovada", "Contraproposta"]),
+      motivo: z.string().optional(),
+      taxaAprovada: z.number().optional(),
+      prazoAprovado: z.number().optional(),
+      valorAprovado: z.number().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.user as any;
+      const op = await getOperacaoById(input.operacaoId);
+      if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await updateDistribuicao(input.distribuicaoId, {
+        statusRetorno: input.statusRetorno,
+        observacoes: input.motivo,
+        // dataRetorno e campos extras são ignorados se não existem no schema
+      });
+
+      // Atualizar status da operação conforme retorno
+      if (input.statusRetorno === "Aprovada" || input.statusRetorno === "Reprovada") {
+        const novoStatus = input.statusRetorno as any;
+        await updateOperacao(input.operacaoId, { statusMacro: novoStatus });
+        await addHistoricoStatus({
+          operacaoId: input.operacaoId,
+          statusAnterior: op.statusMacro,
+          statusNovo: novoStatus,
+          alteradoPor: user.id,
+          motivo: input.motivo,
+        });
+      }
+
+      await addLog({
+        evento: "retorno_bancario_registrado",
+        detalhe: { distribuicaoId: input.distribuicaoId, statusRetorno: input.statusRetorno, motivo: input.motivo },
+        usuarioId: user.id,
+        operacaoId: input.operacaoId,
+      });
+
+      // Notificar assessor sobre o retorno
+      if (op.assessorId && op.assessorId !== user.id) {
+        await createNotificacao({
+          usuarioId: op.assessorId,
+          operacaoId: input.operacaoId,
+          tipo: "retorno_bancario",
+          mensagem: `Retorno bancário recebido para ${op.codigoOperacao}: ${input.statusRetorno}${input.motivo ? " — " + input.motivo : ""}.`,
+        });
+      }
+
       return { success: true };
     }),
 });

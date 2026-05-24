@@ -94,10 +94,10 @@ describe("RBAC — adminProcedure", () => {
     try {
       await caller.operacoes.metricas();
     } catch (err: any) {
-      // Accept DB errors, not FORBIDDEN
+      // Accept DB errors (connection timeout in test env), not FORBIDDEN
       expect(err.code).not.toBe("FORBIDDEN");
     }
-  });
+  }, 15000);
 
   it("blocks assessor from slaAlerts", async () => {
     const assessor = makeUser({ perfil: "assessor" } as any);

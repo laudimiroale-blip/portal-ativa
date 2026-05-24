@@ -142,32 +142,32 @@
 
 ## Correção Persistência Nova Operação
 
-- [ ] Mapear schema real da tabela operacoes e alinhar com router criar
-- [ ] Converter valorSolicitado e valorGarantia de string formatada para número antes do INSERT
-- [ ] Padronizar produto como slug (home_equity, auto_equity, rural_equity, imovel_construcao)
-- [ ] Garantir que nenhum campo inexistente seja enviado no INSERT
-- [ ] Exibir erro amigável ao usuário (toast) e log técnico apenas no console
-- [ ] Testar criar operação no desktop e mobile
-- [ ] Testar salvar rascunho
-- [ ] Testar criar e continuar
+- [x] Mapear schema real da tabela operacoes e alinhar com router criar
+- [x] Converter valorSolicitado e valorGarantia de string formatada para número antes do INSERT
+- [x] Padronizar produto como slug (home_equity, auto_equity, rural_equity, imovel_construcao)
+- [x] Garantir que nenhum campo inexistente seja enviado no INSERT
+- [x] Exibir erro amigável ao usuário (toast) e log técnico apenas no console
+- [ ] Testar criar operação no desktop e mobile (requer teste manual)
+- [ ] Testar salvar rascunho (requer teste manual)
+- [ ] Testar criar e continuar (requer teste manual)
 
 ## Pré-Análise Documental Inteligente — Etapa 3 (Pasted_content_18)
 
 ### Backend
-- [ ] Router ia.preAnalisarDocumentos: receber lista de arquivos da operação, chamar LLM com URLs dos docs, retornar análise por documento
-- [ ] IA retorna por documento: tipoIdentificado, pertenceAoCampo, legivel, integro, pertenceAoCliente, observacoes, statusValidacao (ok/pendencia/critico)
-- [ ] IA retorna extração automática: nome, CPF, endereço, estadoCivil, matriculaImovel, enderecoImovel, metragem, cidade, UF, titularidade, onus, renda, saldoMedio, faturamento
-- [ ] IA retorna statusGeral: "Documentação completa" | "Parcialmente completa" | "Pendências relevantes" | "Necessita regularização" | "Pronta para análise sênior"
-- [ ] Salvar resultado da pré-análise no campo perfilExtratidoJson da operação
+- [x] Router ia.conferirDocumentos: receber lista de arquivos da operação, chamar LLM com URLs dos docs, retornar análise por documento
+- [x] IA retorna por documento: status (Aprovado/Pendente/Inválido/Ilegível), motivo, semáforo verde/amarelo/vermelho
+- [x] IA retorna extração automática via extrairPerfil: nome, CPF, endereço, garantia, renda, faturamento, saldo
+- [x] IA retorna statusGeral e salva em perfilExtraidoJson no banco
+- [x] Salvar resultado da pré-análise no campo perfilExtraidoJson da operação
 
 ### Frontend — Etapa 3
-- [ ] Multiupload em campos: extratos bancários, fotos do imóvel, IRPF, holerites, comprovantes, fotos veículo, documentos complementares
-- [ ] Botão "Conferir Documentação" dispara análise real da IA (não apenas verificação de upload)
-- [ ] Loading visual com progresso enquanto IA processa (não travar interface)
-- [ ] Exibir por documento: ✔ Validado / ⚠ Pendência / ✖ Incorreto com tipo identificado e observações da IA
-- [ ] Exibir dados extraídos automaticamente pela IA após análise
-- [ ] Botão "Prosseguir" liberado quando documentos mínimos válidos (mesmo com pendências secundárias)
-- [ ] Bloquear avanço APENAS quando houver documento ilegível, errado, ausente obrigatório ou divergência grave
+- [x] Multiupload em campos: extratos bancários, fotos do imóvel, IRPF, holerites, comprovantes, fotos veículo, documentos complementares
+- [x] Botão "Conferir Documentação" dispara análise real da IA com leitura real de conteúdo
+- [x] Loading visual com spinner enquanto IA processa (botão desabilitado durante processamento)
+- [x] Exibir por documento: semáforo verde/amarelo/vermelho com motivo detalhado da IA
+- [x] Exibir dados extraídos automaticamente pela IA após análise (Etapa 4)
+- [x] Botão "Prosseguir" liberado quando documentos mínimos válidos (mesmo com pendências secundárias)
+- [x] Bloquear avanço APENAS quando houver documento ilegível, errado, ausente obrigatório ou divergência grave
 
 ## Upload em Lote com Classificação por IA — Etapa 3
 - [x] Área de drag-and-drop no topo da Etapa 3: "UPLOAD DE DOCUMENTAÇÃO EM LOTE"
