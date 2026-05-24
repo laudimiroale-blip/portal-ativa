@@ -146,13 +146,16 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
             const isDone = etapa > e.id;
             return (
               <React.Fragment key={e.id}>
-                <div
+                <button
+                  type="button"
+                  onClick={() => isDone && operacaoId ? setEtapa(e.id as Etapa) : undefined}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all flex-shrink-0",
                     isActive && "bg-primary/15 text-primary border border-primary/30",
-                    isDone && "text-emerald-400",
-                    !isActive && !isDone && "text-muted-foreground"
+                    isDone && "text-emerald-400 cursor-pointer hover:bg-emerald-400/10",
+                    !isActive && !isDone && "text-muted-foreground cursor-not-allowed"
                   )}
+                  title={isDone ? `Voltar para ${e.label}` : undefined}
                 >
                   {isDone ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -161,7 +164,7 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
                   )}
                   <span className="hidden sm:inline">{e.label}</span>
                   <span className="sm:hidden">{e.id}</span>
-                </div>
+                </button>
                 {idx < etapas.length - 1 && (
                   <ChevronRight className="w-4 h-4 text-border flex-shrink-0" />
                 )}
@@ -934,8 +937,14 @@ function Etapa3Documentos({
   const handleConferir = async () => {
     if (!operacaoId) return;
     setConferindo(true);
+    // Timeout de 90s para chamadas de IA
+    const timeoutId = setTimeout(() => {
+      setConferindo(false);
+      toast.error("A análise demorou mais que o esperado. Tente novamente ou prossiga manualmente.");
+    }, 90_000);
     try {
       const resultado = await conferirMutation.mutateAsync({ operacaoId });
+      clearTimeout(timeoutId);
       setResultadoConferencia(resultado as any);
       // Capturar perfil extraído para exibir no painel
       if ((resultado as any).dadosExtraidos) {
@@ -949,8 +958,15 @@ function Etapa3Documentos({
         toast.warning(`Análise concluída: ${totalPend} pendência(s) encontrada(s). Verifique os documentos abaixo.`);
       }
     } catch (err: any) {
-      toast.error("Erro ao conferir documentação: " + err.message);
+      clearTimeout(timeoutId);
+      const msg = err?.data?.code === "UNAUTHORIZED"
+        ? "Sessão expirada. Faça login novamente."
+        : err?.data?.code === "BAD_REQUEST"
+        ? "Nenhum documento enviado. Envie os documentos antes de conferir."
+        : "Erro ao conferir documentação: " + (err.message ?? "Erro desconhecido");
+      toast.error(msg);
     } finally {
+      clearTimeout(timeoutId);
       setConferindo(false);
     }
   };

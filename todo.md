@@ -315,3 +315,67 @@
 - [x] Bug 1: conferirDocumentos retorna erro — remover response_format json_object, parsing defensivo (extrairJSON), fallback estruturado quando IA não retorna lista de documentos
 - [x] Bug 2: extrairPerfil informa sucesso mas não exibe dados — adicionar perfilLocal + invalidate cache após mutation
 - [x] Integrar dados extraídos pela IA na geração da Defesa Comercial (iptu, escritura, metragem, endereço imóvel, dados do consultor das etapas 1-2)
+
+## Pasted_content_21 — Refatoração e Estabilização Arquitetural
+
+### Fase 1 — Estabilização do Core Operacional
+- [ ] Salvamento automático a cada mudança de etapa (autosave via debounce no wizard)
+- [ ] Recuperação de rascunho ao reabrir operação em andamento
+- [ ] Loading states em todas as mutations críticas (criar, atualizar, conferir, extrair)
+- [ ] Tratamento de erros com toast amigável em todas as procedures
+- [x] Timeout de processamento para chamadas de IA (90s com mensagem de fallback)
+- [ ] Rollback visual em falhas de upload (remover arquivo da UI se S3 falhar)
+- [ ] Sincronização de estado: invalidar cache após cada mutation que altera statusMacro
+- [x] Navegação rápida entre etapas (clicar no número da etapa para voltar)
+
+### Fase 2 — Modularização do Backend
+- [x] Criar server/routers/operacoes.ts (extrair router operacoes do monolito)
+- [x] Criar server/routers/documentos.ts (extrair router documentos)
+- [x] Criar server/routers/ia.ts (extrair router ia + classificarDocumentos)
+- [x] Criar server/routers/usuarios.ts (extrair router usuarios)
+- [x] Criar server/routers/ifCadastros.ts + distribuicoes.ts (extrair routers ifCadastros + distribuicoes)
+- [x] Criar server/routers/historico.ts + termoScr.ts + garantias.ts
+- [x] Atualizar server/routers.ts para importar e montar os módulos (+ router ifs inline)
+
+### Fase 3 — IA Documental Real
+- [ ] Prompt de conferência: instrução explícita para ler conteúdo real (não nome do arquivo)
+- [ ] Prompt: identificar tipo real do documento (CNH, RG, IPTU, matrícula, extrato, etc.)
+- [ ] Prompt: validar legibilidade (imagem nítida, texto legível, sem cortes)
+- [ ] Prompt: detectar documento vencido (CNH, RG, certidões)
+- [ ] Prompt: detectar inconsistência de CPF/nome entre documentos
+- [ ] Prompt: detectar duplicidade de documento (mesmo arquivo em campos diferentes)
+- [ ] Prompt: retornar por documento — status (Aprovado/Pendente/Inválido/Ilegível) + motivo detalhado
+- [ ] Prompt: extrair dados relevantes por tipo (CPF, nome, endereço, validade, número)
+
+### Fase 4 — Extração Automática da Garantia por Produto
+- [ ] Home Equity: extrair matrícula, cartório, endereço, cidade, estado, metragem, titularidade, valor venal, IPTU, ônus, alienações, penhoras
+- [ ] Auto Equity: extrair marca, modelo, ano, placa, Renavam, alienação, débitos aparentes
+- [ ] Rural Equity: extrair área (ha), matrícula, CAR, CCIR, ITR, georreferenciamento, produtividade
+- [ ] Salvar dados extraídos na tabela garantias com preenchidoPorIa=true
+- [ ] Permitir edição manual dos campos extraídos (editadoManualmente=true)
+- [ ] Exibir painel de garantia na Etapa 4 com dados extraídos + botão editar
+
+### Fase 5 — Esteira Operacional Real (15 status)
+- [ ] Migrar enum statusMacro para 15 status: Pré-cadastro, Aguardando documentos, Documentação em análise IA, Pendência documental, Pronta para validação humana, Em validação operacional, Pronta para distribuição, Distribuída para IFs, Aguardando retorno bancário, Aprovada, Reprovada, Em assinatura, Em cartório, Liberação financeira, Finalizada
+- [ ] Executar migração SQL para atualizar enum no banco
+- [ ] Atualizar KANBAN_COLUNAS no FilaOperacional.tsx com os 15 status
+- [ ] Atualizar STATUS_PARA_COLUNA e COLUNA_STATUS_PRINCIPAL
+- [ ] Atualizar shared/const.ts com os novos status
+- [ ] SLA por etapa: alertas específicos por status (ex: 48h em "Documentação em análise IA")
+- [ ] Responsável por etapa: campo responsavelOperacionalId já existe, exibir no card
+
+### Fase 6 — Motor de Distribuição Bancária Inteligente
+- [ ] Procedure ifCadastros.listarCompativeis: filtrar IFs por produto + LTV + valor + prazo
+- [ ] Ao abrir modal de distribuição, pré-selecionar apenas IFs compatíveis com a operação
+- [ ] Exibir motivo de incompatibilidade para IFs não elegíveis (LTV acima do limite, produto não aceito, etc.)
+- [ ] Impedir distribuição para IF incompatível (validação server-side)
+- [ ] Registrar retorno bancário com data/hora e responsável
+- [ ] Procedure distribuicoes.registrarRetorno: atualizar statusRetorno + motivo + data
+
+### Fase 7 — UX Operacional
+- [ ] Exportação PDF da defesa comercial (botão "Exportar PDF" na Etapa 4)
+- [ ] Edição inline dos dados extraídos pela IA (campos editáveis no painel de perfil)
+- [ ] Salvar edições manuais do perfil extraído no banco (perfilExtraidoJson atualizado)
+- [ ] Barra de progresso real durante análise IA (polling de status ou SSE)
+- [ ] Responsividade mobile: wizard funcional em telas < 768px
+- [ ] Navegação rápida entre etapas (clicar no número da etapa para voltar)

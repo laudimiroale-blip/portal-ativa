@@ -1,0 +1,9 @@
+export { usuariosRouter } from "./usuarios";
+export { operacoesRouter } from "./operacoes";
+export { documentosRouter } from "./documentos";
+export { iaRouter } from "./ia";
+export { distribuicoesRouter } from "./distribuicoes";
+export { garantiasRouter } from "./garantias";
+export { historicoRouter } from "./historico";
+export { ifCadastrosRouter } from "./ifCadastros";
+export { termoScrRouter } from "./termoScr";
