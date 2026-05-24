@@ -1826,8 +1826,16 @@ function Etapa4ResumoDefesa({
       const resultado = await extrairPerfilMutation.mutateAsync({ operacaoId });
       // Usar perfil retornado diretamente para exibir sem aguardar refetch
       const p = resultado.perfil as any;
+      // Garantir que nome/CPF da operação sejam usados como fallback quando IA não encontrou
+      const clienteExtraido = p?.cliente ?? {};
+      const clienteComFallback = {
+        ...clienteExtraido,
+        nome_completo: clienteExtraido.nome_completo || (op as any)?.nomeCliente || null,
+        cpf: clienteExtraido.cpf || (op as any)?.cpf || null,
+        estado_civil: clienteExtraido.estado_civil || (op as any)?.estadoCivil || null,
+      };
       setPerfilLocal({
-        cliente: p?.cliente ?? {},
+        cliente: clienteComFallback,
         financeiro: p?.financeiro ?? {},
         garantia: p?.garantia ?? {},
         risco: p?.risco ?? {},

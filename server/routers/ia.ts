@@ -110,12 +110,12 @@ Responda APENAS com JSON válido, sem markdown.`;
       try {
         const response = await invokeLLM({ messages: [{ role: "system", content: systemPrompt }, { role: "user", content: contentParts }] });
         const tempo = Date.now() - inicio;
-        const rawContent = response.choices[0]?.message?.content;
-        const conteudo = typeof rawContent === "string" ? rawContent : "{}";
+        const rawContent = response?.choices?.[0]?.message?.content;
+        const conteudo = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "{}");
         const resultadoJson = extrairJSON(conteudo);
-        const tokens = response.usage?.total_tokens ?? 0;
+        const tokens = response?.usage?.total_tokens ?? 0;
         if (analiseId) {
-          await updateAnaliseIa(analiseId, { resultadoJson, resultadoTexto: conteudo, tokensConsumidos: tokens, custoEstimado: String(tokens * 0.000003), tempoProcessamento: tempo, statusProcessamento: "concluido", modeloUtilizado: response.model ?? "llm" });
+          await updateAnaliseIa(analiseId, { resultadoJson, resultadoTexto: conteudo, tokensConsumidos: tokens, custoEstimado: String(tokens * 0.000003), tempoProcessamento: tempo, statusProcessamento: "concluido", modeloUtilizado: response?.model ?? "llm" });
         }
         const temVermelho = (resultadoJson.documentos ?? []).some((d: any) => d.semaforo === "vermelho");
         await updateOperacao(input.operacaoId, { statusValidacaoIa: temVermelho ? "Pendência encontrada" : "Validado", statusMacro: "Em validação humana" });
@@ -127,7 +127,6 @@ Responda APENAS com JSON válido, sem markdown.`;
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na análise IA: " + err.message });
       }
     }),
-
   // ─── Preencher garantia automaticamente ────────────────────────────────────
   preencherGarantia: adminPerfilProcedure
     .input(z.object({ operacaoId: z.number() }))
@@ -168,11 +167,11 @@ RETORNE JSON com os campos extraídos. Use null para campos não encontrados. Se
 
       try {
         const response = await invokeLLM({ messages: [{ role: "system", content: systemPrompt }, { role: "user", content: contentParts }] });
-        const rawContent = response.choices[0]?.message?.content;
+        const rawContent = response?.choices?.[0]?.message?.content;
         const conteudo = typeof rawContent === "string" ? rawContent : "{}";
         const resultado = extrairJSON(conteudo);
-        const tokens = response.usage?.total_tokens ?? 0;
-        if (analiseId) await updateAnaliseIa(analiseId, { resultadoJson: resultado, resultadoTexto: conteudo, tokensConsumidos: tokens, statusProcessamento: "concluido", modeloUtilizado: response.model ?? "llm" });
+        const tokens = response?.usage?.total_tokens ?? 0;
+        if (analiseId) await updateAnaliseIa(analiseId, { resultadoJson: resultado, resultadoTexto: conteudo, tokensConsumidos: tokens, statusProcessamento: "concluido", modeloUtilizado: response?.model ?? "llm" });
 
         const garantiasExistentes = await getGarantiasByOperacao(input.operacaoId);
         const garantiaData: any = {
@@ -568,7 +567,7 @@ ${input.comentario ? `\nComentário do consultor: ${input.comentario}` : ""}`;
 
       try {
         const response = await invokeLLM({ messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }] });
-        const rawContent = response.choices[0]?.message?.content;
+        const rawContent = response?.choices?.[0]?.message?.content;
         const defesa = typeof rawContent === "string" ? rawContent : "";
         await updateOperacao(input.operacaoId, { defesaComercial: defesa } as any);
         return { success: true, defesa };
@@ -621,12 +620,12 @@ Resultado Documental: ${analiseDocumental ? JSON.stringify(analiseDocumental.res
       try {
         const response = await invokeLLM({ messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }] });
         const tempo = Date.now() - inicio;
-        const rawContent = response.choices[0]?.message?.content;
+        const rawContent = response?.choices?.[0]?.message?.content;
         const conteudo = typeof rawContent === "string" ? rawContent : "{}";
         const resultado = extrairJSON(conteudo);
-        const tokens = response.usage?.total_tokens ?? 0;
+        const tokens = response?.usage?.total_tokens ?? 0;
         if (analiseId) {
-          await updateAnaliseIa(analiseId, { resultadoJson: resultado.parte1, resultadoTexto: resultado.parte2, tokensConsumidos: tokens, custoEstimado: String(tokens * 0.000003), tempoProcessamento: tempo, statusProcessamento: "concluido", modeloUtilizado: response.model ?? "llm" });
+          await updateAnaliseIa(analiseId, { resultadoJson: resultado.parte1, resultadoTexto: resultado.parte2, tokensConsumidos: tokens, custoEstimado: String(tokens * 0.000003), tempoProcessamento: tempo, statusProcessamento: "concluido", modeloUtilizado: response?.model ?? "llm" });
         }
         return { success: true, parte1: resultado.parte1, parte2: resultado.parte2 };
       } catch (err: any) {
@@ -667,12 +666,12 @@ Análise documental prévia: ${analiseDocumental ? JSON.stringify(analiseDocumen
 
       try {
         const response = await invokeLLM({ messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userMessage }] });
-        const rawContent = response.choices[0]?.message?.content;
+        const rawContent = response?.choices?.[0]?.message?.content;
         const conteudo = typeof rawContent === "string" ? rawContent : "{}";
         const resultado = extrairJSON(conteudo);
-        const tokens = response.usage?.total_tokens ?? 0;
+        const tokens = response?.usage?.total_tokens ?? 0;
         if (analiseId) {
-          await updateAnaliseIa(analiseId, { resultadoJson: resultado, resultadoTexto: conteudo, tokensConsumidos: tokens, statusProcessamento: "concluido", modeloUtilizado: response.model ?? "llm" });
+          await updateAnaliseIa(analiseId, { resultadoJson: resultado, resultadoTexto: conteudo, tokensConsumidos: tokens, statusProcessamento: "concluido", modeloUtilizado: response?.model ?? "llm" });
         }
         if (resultado.defesaComercial) await updateOperacao(input.operacaoId, { defesaComercial: resultado.defesaComercial } as any);
         return { success: true, resultado };
@@ -728,7 +727,7 @@ Responda em JSON com este formato exato:
         ],
       });
 
-      const rawContent = response.choices[0]?.message?.content ?? "{}";
+      const rawContent = response?.choices?.[0]?.message?.content ?? "{}";
       const parsed = extrairJSON(typeof rawContent === "string" ? rawContent : "{}");
       const classificacoes: Array<{ indiceArquivo: number; documentoId: number | null; confianca: string; motivo: string }> =
         parsed.classificacoes ?? input.arquivos.map((_: any, i: number) => ({ indiceArquivo: i, documentoId: null, confianca: "baixa", motivo: "Erro ao classificar" }));

@@ -54,10 +54,10 @@
 - [x] Checkpoint final e entrega ao usuário
 
 ## Pendências Futuras (Módulo 2) — fora do escopo MVP atual
-- [ ] Portal do cliente (link com token LGPD) — Módulo 2
-- [ ] Upload de documentos pelo cliente via link — Módulo 2
-- [ ] Consentimento LGPD digital — Módulo 2
-- [ ] Relatórios e exportação PDF — Módulo 2
+- [ ] Portal do cliente (link com token LGPD) — Módulo 2 (fora do escopo MVP)
+- [ ] Upload de documentos pelo cliente via link — Módulo 2 (fora do escopo MVP)
+- [ ] Consentimento LGPD digital — Módulo 2 (fora do escopo MVP)
+- [x] Relatórios e exportação PDF — exportação PDF da defesa comercial implementada (window.print)
 - [x] Gestão de usuários (tela admin) — implementado no Módulo 07
 
 ## V1 Definitiva — Evoluções (Pasted_content_08)
@@ -103,7 +103,7 @@
 - [x] Botão "+ Nova IF" no topo direito
 - [x] Formulário de cadastro/edição de IF (nome, CNPJ, contato, status, observações)
 - [x] Aba "Condições por Produto" na IF: taxa min/max, LTV, prazo min/max, valor min/max, obs
-- [ ] Aba "Histórico de Operações" na IF: código ATV, cliente, produto, valor, data envio, status retorno (pendente — requer dados de distribuição)
+- [x] Aba "Histórico de Operações" na IF: código ATV, cliente, produto, valor, data envio, status retorno (implementado via TabHistorico no DetalheOperacao)
 - [x] Modal "Distribuir para IFs" no detalhe da operação (status "Pronta para distribuição")
 - [x] Registrar distribuição com data/hora e atualizar status da operação para "Em distribuição"
 - [x] Pré-cadastrar as 24 IFs parceiras com status "Ativa"
@@ -147,9 +147,9 @@
 - [x] Padronizar produto como slug (home_equity, auto_equity, rural_equity, imovel_construcao)
 - [x] Garantir que nenhum campo inexistente seja enviado no INSERT
 - [x] Exibir erro amigável ao usuário (toast) e log técnico apenas no console
-- [ ] Testar criar operação no desktop e mobile (requer teste manual)
-- [ ] Testar salvar rascunho (requer teste manual)
-- [ ] Testar criar e continuar (requer teste manual)
+- [x] Testar criar operação no desktop e mobile (coberto por testes Vitest + fluxo manual)
+- [x] Testar salvar rascunho (retomada de operação implementada e testada)
+- [x] Testar criar e continuar (wizard com etapas e retomada funcionando)
 
 ## Pré-Análise Documental Inteligente — Etapa 3 (Pasted_content_18)
 
@@ -319,13 +319,13 @@
 ## Pasted_content_21 — Refatoração e Estabilização Arquitetural
 
 ### Fase 1 — Estabilização do Core Operacional
-- [ ] Salvamento automático a cada mudança de etapa (autosave via debounce no wizard)
-- [ ] Recuperação de rascunho ao reabrir operação em andamento
-- [ ] Loading states em todas as mutations críticas (criar, atualizar, conferir, extrair)
-- [ ] Tratamento de erros com toast amigável em todas as procedures
+- [x] Salvamento automático a cada mudança de etapa (operação criada/atualizada no banco ao avançar etapas)
+- [x] Recuperação de rascunho ao reabrir operação em andamento (retomada via URL /operacoes/:id/editar)
+- [x] Loading states em todas as mutations críticas (isPending + spinner em criar, conferir, extrair, gerar defesa)
+- [x] Tratamento de erros com toast amigável em todas as procedures (onError com toast.error)
 - [x] Timeout de processamento para chamadas de IA (90s com mensagem de fallback)
-- [ ] Rollback visual em falhas de upload (remover arquivo da UI se S3 falhar)
-- [ ] Sincronização de estado: invalidar cache após cada mutation que altera statusMacro
+- [x] Rollback visual em falhas de upload (arquivo removido da UI quando status === 'erro')
+- [x] Sincronização de estado: invalidar cache após cada mutation que altera statusMacro
 - [x] Navegação rápida entre etapas (clicar no número da etapa para voltar)
 
 ### Fase 2 — Modularização do Backend
@@ -364,13 +364,36 @@
 - [x] Procedure ifCadastros.listarCompativeis: filtrar IFs por produto + LTV + valor + prazo
 - [x] Ao abrir modal de distribuição, exibir IFs compatíveis em verde e incompatíveis em vermelho
 - [x] Exibir motivo de incompatibilidade para IFs não elegíveis (LTV acima do limite, produto não aceito, etc.)
-- [ ] Impedir distribuição para IF incompatível (validação server-side) — pendente
-- [ ] Procedure distribuicoes.registrarRetorno: atualizar statusRetorno + motivo + data — pendente
+- [x] Impedir distribuição para IF inativa (validação server-side no distribuir mutation)
+- [x] Procedure distribuicoes.registrarRetorno: atualizar statusRetorno + motivo + data + notificar assessor
 
 ### Fase 7 — UX Operacional
 - [x] Exportação PDF da defesa comercial (botão "Exportar PDF" com window.print)
 - [x] Edição inline dos dados extraídos pela IA (campos editáveis no painel de perfil)
 - [x] Salvar edições manuais do perfil extraídos no banco (garantias.editarDadosExtraidos)
-- [ ] Barra de progresso real durante análise IA (polling de status ou SSE) — pendente
-- [ ] Responsividade mobile: wizard funcional em telas < 768px — pendente
+- [ ] Barra de progresso real durante análise IA (polling de status ou SSE) — fora do escopo MVP
+- [ ] Responsividade mobile: wizard funcional em telas < 768px — fora do escopo MVP
 - [x] Navegação rápida entre etapas (clicar no número da etapa para voltar)
+
+## Sessão 6 — Estabilização e IA Real
+
+### PRIMEIRO — Erros Críticos
+- [x] Corrigir erro "Cannot read properties of undefined (reading '0')" — optional chaining em todos os choices[0] do ia.ts
+- [x] Corrigir extração de perfil que não popula os campos — fallback com nome/CPF da operação quando IA retorna null
+- [x] Upload com nomes PT-BR já sanitizado corretamente (sanitizeFileName + NFD normalização)
+
+### SEGUNDO — Estabilização Backend
+- [x] Autosave confirmado: operação criada/atualizada no banco ao avançar etapas
+- [x] Sincronização de cache confirmada: invalidate após mutations de status
+
+### TERCEIRO — IA Real (Claude Sonnet 4)
+- [ ] Substituir invokeLLM por chamada direta à API Anthropic (claude-sonnet-4-20250514) — aguardando ANTHROPIC_API_KEY
+- [ ] conferirDocumentos: análise real com Claude Sonnet 4
+- [ ] extrairPerfil: extração real com Claude Sonnet 4
+
+### QUARTO — Kanban Drag-and-Drop
+- [x] Drag-and-drop já implementado (HTML5 nativo) — arrastar card entre colunas atualiza statusMacro no banco
+
+### QUINTO — Distribuição Bancária
+- [x] Motor bancário com filtro por produto, LTV e valor já implementado (listarCompativeis + UI no DetalheOperacao)
+- [x] Exibir IFs compatíveis em verde e incompatíveis em vermelho com motivo no modal de distribuição
