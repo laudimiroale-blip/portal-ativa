@@ -630,11 +630,61 @@ function Etapa3Documentos({
     { enabled: !!operacaoId }
   );
   const uploadMutation = trpc.documentos.upload.useMutation();
-  const conferirMutation = trpc.ia.conferirDocumentos.useMutation();
+  const iniciarConferenciaMutation = trpc.ia.iniciarConferencia.useMutation();
   const atualizarMutation = trpc.operacoes.atualizar.useMutation();
   const naoAplicavelMutation = trpc.documentos.marcarNaoAplicavel.useMutation({
     onSuccess: () => refetch(),
   });
+
+  // Polling assíncrono de status da conferência
+  const [pollingAtivo, setPollingAtivo] = useState(false);
+  const { data: statusConferencia, refetch: refetchStatus } = trpc.ia.statusConferencia.useQuery(
+    { operacaoId: operacaoId! },
+    {
+      enabled: !!operacaoId && pollingAtivo,
+      refetchInterval: pollingAtivo ? 3000 : false,
+    }
+  );
+
+  // Quando polling ativo e conferência concluída, processar resultado
+  React.useEffect(() => {
+    if (!pollingAtivo || !statusConferencia) return;
+    if (statusConferencia.analisandoIa) return; // ainda processando
+    if (statusConferencia.statusProcessamento === "concluido" && statusConferencia.resultado) {
+      setPollingAtivo(false);
+      setConferindo(false);
+      const resultado = statusConferencia.resultado as any;
+      setResultadoConferencia({
+        aprovado: resultado.pode_prosseguir ?? false,
+        situacaoGeral: resultado.situacao_geral ?? "Pendências secundárias",
+        documentosPorStatus: resultado.documentos ?? [],
+        dadosExtraidos: resultado.dados_extraidos_operacao ?? null,
+        leituraOperacional: resultado.leitura_operacional ?? null,
+        pendenciasCriticas: resultado.pendencias_criticas ?? [],
+        pendenciasSecundarias: resultado.pendencias_secundarias ?? [],
+        documentosAusentes: resultado.documentos_ausentes ?? [],
+        resumo: resultado.resumo_documental ?? "",
+        checklist_total: resultado.documentos?.length ?? 0,
+        checklist_concluidos: resultado.documentos?.filter((d: any) => d.semaforo === "verde").length ?? 0,
+      });
+      if (resultado.dados_extraidos_operacao) setPerfilExtraido(resultado.dados_extraidos_operacao);
+      if (resultado.pode_prosseguir) {
+        toast.success("Documentação validada pela IA! Você pode prosseguir.");
+        atualizarMutation.mutate({ id: operacaoId!, etapaAtual: 4 });
+      } else {
+        const totalPend = (resultado.pendencias_criticas?.length ?? 0) + (resultado.pendencias_secundarias?.length ?? 0);
+        toast.warning(`Análise concluída: ${totalPend} pendência(s) encontrada(s). Verifique os documentos abaixo.`);
+      }
+    } else if (statusConferencia.statusProcessamento === "erro") {
+      setPollingAtivo(false);
+      setConferindo(false);
+      toast.error("Erro na análise: " + (statusConferencia.erro ?? "Erro desconhecido"));
+    } else if (!statusConferencia.analisandoIa && statusConferencia.statusProcessamento !== "processando") {
+      // Sem análise ativa e não processando — parar polling
+      setPollingAtivo(false);
+      setConferindo(false);
+    }
+  }, [statusConferencia, pollingAtivo]);
 
   const [filaArquivos, setFilaArquivos] = useState<Record<number, ArquivoLocal[]>>({});
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -937,37 +987,23 @@ function Etapa3Documentos({
   const handleConferir = async () => {
     if (!operacaoId) return;
     setConferindo(true);
-    // Timeout de 90s para chamadas de IA
-    const timeoutId = setTimeout(() => {
-      setConferindo(false);
-      toast.error("A análise demorou mais que o esperado. Tente novamente ou prossiga manualmente.");
-    }, 90_000);
     try {
-      const resultado = await conferirMutation.mutateAsync({ operacaoId });
-      clearTimeout(timeoutId);
-      setResultadoConferencia(resultado as any);
-      // Capturar perfil extraído para exibir no painel
-      if ((resultado as any).dadosExtraidos) {
-        setPerfilExtraido((resultado as any).dadosExtraidos);
+      const resultado = await iniciarConferenciaMutation.mutateAsync({ operacaoId });
+      if (!resultado.iniciado) {
+        toast.info(resultado.mensagem ?? "Análise já em andamento.");
+        setPollingAtivo(true);
+        return;
       }
-      if (resultado.aprovado) {
-        toast.success("Documentação validada pela IA! Você pode prosseguir.");
-        await atualizarMutation.mutateAsync({ id: operacaoId, etapaAtual: 4 });
-      } else {
-        const totalPend = ((resultado as any).pendenciasCriticas?.length ?? 0) + ((resultado as any).pendenciasSecundarias?.length ?? 0);
-        toast.warning(`Análise concluída: ${totalPend} pendência(s) encontrada(s). Verifique os documentos abaixo.`);
-      }
+      toast.info("Análise documental iniciada. Acompanhe o progresso abaixo.");
+      setPollingAtivo(true);
     } catch (err: any) {
-      clearTimeout(timeoutId);
+      setConferindo(false);
       const msg = err?.data?.code === "UNAUTHORIZED"
         ? "Sessão expirada. Faça login novamente."
         : err?.data?.code === "BAD_REQUEST"
         ? "Nenhum documento enviado. Envie os documentos antes de conferir."
-        : "Erro ao conferir documentação: " + (err.message ?? "Erro desconhecido");
+        : "Erro ao iniciar análise: " + (err.message ?? "Erro desconhecido");
       toast.error(msg);
-    } finally {
-      clearTimeout(timeoutId);
-      setConferindo(false);
     }
   };
 
@@ -1719,6 +1755,37 @@ function Etapa3Documentos({
         </div>
       )}
 
+      {/* Barra de progresso da análise IA */}
+      {(conferindo || pollingAtivo) && (
+        <div className="mt-4 p-4 rounded-lg border border-primary/20 bg-primary/5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-sm text-primary">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="font-medium">Análise documental em andamento...</span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {statusConferencia?.progressoIa ?? 5}%
+            </span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-2">
+            <div
+              className="bg-primary h-2 rounded-full transition-all duration-500"
+              style={{ width: `${statusConferencia?.progressoIa ?? 5}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {(statusConferencia?.progressoIa ?? 0) < 25
+              ? "Preparando documentos para análise..."
+              : (statusConferencia?.progressoIa ?? 0) < 50
+              ? "Enviando documentos para a IA..."
+              : (statusConferencia?.progressoIa ?? 0) < 85
+              ? "IA analisando conteúdo real dos documentos..."
+              : "Processando resultados e extraindo dados..."
+            }
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between pt-2">
         <Button variant="outline" onClick={onBack} className="gap-2">
           <ArrowLeft className="w-4 h-4" />
@@ -1737,11 +1804,11 @@ function Etapa3Documentos({
           <Button
             variant="outline"
             onClick={handleConferir}
-            disabled={conferindo || enviados.length === 0}
+            disabled={conferindo || pollingAtivo || enviados.length === 0}
             className="gap-2"
           >
-            {conferindo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-            Conferir Documentação
+            {(conferindo || pollingAtivo) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+            {(conferindo || pollingAtivo) ? "Analisando..." : "Conferir Documentação"}
           </Button>
           <Button
             onClick={onNext}

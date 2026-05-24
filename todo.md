@@ -397,3 +397,36 @@
 ### QUINTO — Distribuição Bancária
 - [x] Motor bancário com filtro por produto, LTV e valor já implementado (listarCompativeis + UI no DetalheOperacao)
 - [x] Exibir IFs compatíveis em verde e incompatíveis em vermelho com motivo no modal de distribuição
+
+## Pasted_content_22 — Consolidação e Transformação em Plataforma Operacional Real
+
+### Item 1 — Consolidar Core Operacional
+- [x] Adicionar campo `analisandoIa` (boolean) na tabela operacoes para controle de processamento assíncrono
+- [x] Adicionar campo `progressoIa` (int 0-100) na tabela operacoes para barra de progresso real
+- [x] Adicionar índices de performance: operacoes.assessorId, operacoes.statusMacro, documentos.operacaoId, historico_status_operacao.operacaoId
+- [ ] Corrigir inconsistências desktop/mobile no wizard (responsividade básica)
+
+### Item 6 — Processamento Assíncrono
+- [x] Procedure `ia.iniciarConferencia`: dispara análise em background e retorna imediatamente (sem bloquear UI)
+- [x] Procedure `ia.statusConferencia`: retorna progresso atual (analisandoIa, progressoIa, resultado parcial)
+- [x] Frontend: polling a cada 3s em `ia.statusConferencia` enquanto `analisandoIa === true`
+- [x] Barra de progresso real (0-100%) durante análise documental na Etapa 3
+- [x] Loading state não-bloqueante: botão "Conferir" mostra progresso sem travar a UI
+- [x] Rate limiting nas procedures de IA (máx 3 chamadas/minuto por usuário)
+
+### Item 4 — Kanban Operacional Profissional
+- [x] Timeline operacional visual: linha do tempo por operação no card expandido ou modal
+- [x] Movimentações automáticas: após conferirDocumentos aprovado → mover para "Documentação completa"
+- [x] Logs completos de movimentação: quem moveu, quando, de qual status para qual, motivo opcional
+- [x] Campo `motivo` opcional ao arrastar card no Kanban (modal de confirmação com campo de texto)
+- [x] Exibir nome do responsável pela última movimentação no card
+
+### Item 5 — Motor de Distribuição Bancária
+- [x] Verificar e garantir que filtro por produto funciona para Rural Equity, Auto Equity e Imóvel em Construção
+- [x] UI de cadastro de condições mais completa: regras internas (observações por produto)
+- [x] Aviso visual quando nenhuma IF tem o produto cadastrado (com link para cadastrar)
+
+### Item 7 — Escalabilidade
+- [x] Índices SQL nas tabelas mais consultadas (operacoes, documentos, historico_status_operacao, notificacoes)
+- [x] Rate limiting nas procedures de IA (middleware tRPC)
+- [x] Procedure `ia.statusConferencia` para polling sem sobrecarga

@@ -1,4 +1,4 @@
-import { aliasedTable, and, desc, eq, getTableColumns, isNull, like, or, sql, SQL } from "drizzle-orm";
+import { aliasedTable, and, desc, eq, getTableColumns, inArray, isNull, like, or, sql, SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -327,11 +327,22 @@ export async function updateIF(id: number, data: Partial<typeof instituicoesFina
 export async function getHistoricoByOperacao(operacaoId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select()
     .from(historicoStatusOperacao)
     .where(eq(historicoStatusOperacao.operacaoId, operacaoId))
     .orderBy(desc(historicoStatusOperacao.createdAt));
+  // Enriquecer com nome do usuário
+  const userIds = [...new Set(rows.map((r) => r.alteradoPor).filter(Boolean))];
+  const userMap: Record<number, string> = {};
+  if (userIds.length > 0) {
+    const usersResult = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));
+    usersResult.forEach((u) => { if (u.id) userMap[u.id] = u.name ?? "Usuário"; });
+  }
+  return rows.map((r) => ({
+    ...r,
+    alteradoPorNome: r.alteradoPor ? (userMap[r.alteradoPor] ?? "Usuário") : null,
+  }));
 }
 
 export async function addHistoricoStatus(data: typeof historicoStatusOperacao.$inferInsert) {

@@ -254,9 +254,10 @@ export const operacoesRouter = router({
       defesaAprovada: z.boolean().optional(),
       perfilExtraidoJson: z.any().optional(),
       responsavelOperacionalId: z.number().nullable().optional(),
+      motivo: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { id, statusMacro, ...rest } = input;
+      const { id, statusMacro, motivo, ...rest } = input;
       const op = await getOperacaoById(id);
       if (!op) throw new TRPCError({ code: "NOT_FOUND" });
       const user = ctx.user as any;
@@ -271,6 +272,7 @@ export const operacoesRouter = router({
           statusAnterior: op.statusMacro,
           statusNovo: statusMacro,
           alteradoPor: user.id,
+          motivo: motivo ?? undefined,
         });
       }
       await updateOperacao(id, updateData);
@@ -279,8 +281,11 @@ export const operacoesRouter = router({
       if (statusMacro) {
         const admins = await getAdmins();
         const notifMap: Record<string, { tipo: string; msg: string }> = {
+          "Documentação completa": { tipo: "documentacao_completa", msg: `Documentação completa: ${op.codigoOperacao} — ${op.nomeCliente}` },
           "Documentação Completa": { tipo: "documentacao_completa", msg: `Documentação completa: ${op.codigoOperacao} — ${op.nomeCliente}` },
+          "Pronta para análise": { tipo: "pronta_analise", msg: `Operação pronta para análise IA: ${op.codigoOperacao} — ${op.nomeCliente}` },
           "Pronta para Análise": { tipo: "pronta_analise", msg: `Operação pronta para análise IA: ${op.codigoOperacao} — ${op.nomeCliente}` },
+          "Pronta para distribuição": { tipo: "pronta_distribuicao", msg: `Operação pronta para distribuição: ${op.codigoOperacao} — ${op.nomeCliente}` },
           "Pronta para Distribuição": { tipo: "pronta_distribuicao", msg: `Operação pronta para distribuição: ${op.codigoOperacao} — ${op.nomeCliente}` },
         };
         const notif = notifMap[statusMacro];

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import AtivaDashboardLayout from "@/components/AtivaDashboardLayout";
 import {
+  AlertTriangle,
   Building2,
   ChevronDown,
   ChevronRight,
@@ -244,7 +245,17 @@ function CondicoesProduto({ ifId, isAdmin }: { ifId: number; isAdmin: boolean })
                 {cond.observacoes && <div className="col-span-2 md:col-span-4"><span className="text-[#888]">Obs:</span> <span className="text-[#FAFAFA]">{cond.observacoes}</span></div>}
               </div>
             ) : (
-              <p className="text-xs text-[#555]">Nenhuma condição configurada para este produto.</p>
+              <div className="flex items-center justify-between p-2 bg-amber-500/5 border border-amber-500/20 rounded-md">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500/70 flex-shrink-0" />
+                  <p className="text-xs text-amber-500/70">Sem condições configuradas — esta IF não aparecerá na distribuição para este produto.</p>
+                </div>
+                {isAdmin && (
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-amber-500 hover:bg-amber-500/10 ml-2 flex-shrink-0" onClick={() => iniciarEdicao(produto)}>
+                    Configurar
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         );

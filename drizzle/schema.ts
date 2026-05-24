@@ -123,6 +123,9 @@ export const operacoes = mysqlTable("operacoes", {
   defesaAprovada: boolean("defesaAprovada").default(false).notNull(),
   perfilExtraidoJson: json("perfilExtraidoJson"),
   ultimaMovimentacaoEm: timestamp("ultimaMovimentacaoEm").defaultNow().notNull(),
+  // Processamento assíncrono de IA
+  analisandoIa: boolean("analisandoIa").default(false).notNull(),
+  progressoIa: int("progressoIa").default(0).notNull(),
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

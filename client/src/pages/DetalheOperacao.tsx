@@ -23,6 +23,7 @@ import {
   Shield,
   Trash2,
   Upload,
+  User,
   X,
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -1169,13 +1170,25 @@ function TabHistorico({ operacaoId }: { operacaoId: number }) {
                     )}
                     <StatusBadge status={h.statusNovo} />
                   </div>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <Clock className="w-3 h-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">
-                      {format(new Date(h.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                    </span>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(h.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
+                    {(h as any).alteradoPorNome && (
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-xs text-primary/70 font-medium">{(h as any).alteradoPorNome}</span>
+                      </div>
+                    )}
                   </div>
-                  {h.motivo && <p className="text-xs text-muted-foreground mt-1">{h.motivo}</p>}
+                  {h.motivo && (
+                    <div className="mt-1.5 px-2 py-1 bg-muted/30 rounded text-xs text-muted-foreground border-l-2 border-primary/30">
+                      {h.motivo}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -18,6 +18,9 @@ import {
   User,
   X,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -385,6 +388,10 @@ export default function FilaOperacional() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOverColuna, setDragOverColuna] = useState<string | null>(null);
 
+  // Modal de confirmação de movimentação
+  const [modalMovimento, setModalMovimento] = useState<{ opId: number; novoStatus: string; nomeCliente: string } | null>(null);
+  const [motivoMovimento, setMotivoMovimento] = useState("");
+
   const utils = trpc.useUtils();
   const atualizarMutation = trpc.operacoes.atualizar.useMutation({
     onSuccess: () => {
@@ -466,6 +473,8 @@ export default function FilaOperacional() {
       const novoStatus = COLUNA_STATUS_PRINCIPAL[colunaId];
       if (!novoStatus) {
         toast.error("Coluna sem status mapeado");
+        setDraggingId(null);
+        setDragOverColuna(null);
         return;
       }
 
@@ -477,12 +486,25 @@ export default function FilaOperacional() {
         return;
       }
 
-      atualizarMutation.mutate({ id: opId, statusMacro: novoStatus });
+      // Abrir modal de confirmação com motivo opcional
+      setModalMovimento({ opId, novoStatus, nomeCliente: op?.nomeCliente ?? "" });
+      setMotivoMovimento("");
       setDraggingId(null);
       setDragOverColuna(null);
     },
     [draggingId, operacoesRaw, atualizarMutation]
   );
+
+  const confirmarMovimento = () => {
+    if (!modalMovimento) return;
+    atualizarMutation.mutate({
+      id: modalMovimento.opId,
+      statusMacro: modalMovimento.novoStatus,
+      motivo: motivoMovimento.trim() || undefined,
+    });
+    setModalMovimento(null);
+    setMotivoMovimento("");
+  };
 
   const limparFiltros = () => {
     setBusca("");
@@ -715,6 +737,40 @@ export default function FilaOperacional() {
           </div>
         )}
       </div>
+
+      {/* Modal de Confirmação de Movimentação */}
+      <Dialog open={!!modalMovimento} onOpenChange={(open) => { if (!open) { setModalMovimento(null); setMotivoMovimento(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Confirmar Movimentação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-3 bg-muted/30 rounded-lg text-xs">
+              <p className="text-muted-foreground mb-1">Operação:</p>
+              <p className="font-medium text-foreground">{modalMovimento?.nomeCliente}</p>
+              <p className="text-muted-foreground mt-2 mb-1">Novo status:</p>
+              <p className="font-semibold text-primary">{modalMovimento?.novoStatus}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Motivo da movimentação <span className="opacity-50">(opcional)</span></Label>
+              <Textarea
+                placeholder="Ex: Documentos validados, cliente confirmou envio..."
+                value={motivoMovimento}
+                onChange={(e) => setMotivoMovimento(e.target.value)}
+                className="text-xs min-h-[80px] resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setModalMovimento(null); setMotivoMovimento(""); }}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={confirmarMovimento} disabled={atualizarMutation.isPending}>
+              {atualizarMutation.isPending ? "Movendo..." : "Confirmar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AtivaDashboardLayout>
   );
 }

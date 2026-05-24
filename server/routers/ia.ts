@@ -39,6 +39,37 @@ const extrairJSON = (raw: string): any => {
   return {};
 };
 
+// ─── Rate Limiting em memória para procedures de IA ────────────────────────
+// Máx 3 chamadas por usuário por minuto
+const IA_RATE_LIMIT = 3;
+const IA_RATE_WINDOW_MS = 60_000;
+const iaRateLimitMap = new Map<number, { count: number; resetAt: number }>();
+
+function checkIaRateLimit(userId: number): void {
+  const now = Date.now();
+  const entry = iaRateLimitMap.get(userId);
+  if (!entry || now >= entry.resetAt) {
+    iaRateLimitMap.set(userId, { count: 1, resetAt: now + IA_RATE_WINDOW_MS });
+    return;
+  }
+  if (entry.count >= IA_RATE_LIMIT) {
+    const restante = Math.ceil((entry.resetAt - now) / 1000);
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: `Limite de chamadas de IA atingido. Aguarde ${restante}s antes de tentar novamente.`,
+    });
+  }
+  entry.count++;
+}
+
+// Limpar entradas expiradas a cada 5 minutos
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of iaRateLimitMap.entries()) {
+    if (now >= val.resetAt) iaRateLimitMap.delete(key);
+  }
+}, 300_000);
+
 // Helper: construir URL pública para o LLM
 const buildPublicUrl = (url: string) => {
   if (!url) return url;
@@ -197,11 +228,197 @@ RETORNE JSON com os campos extraídos. Use null para campos não encontrados. Se
       }
     }),
 
+  // ─── Status da conferência assíncrona ────────────────────────────────────────
+  statusConferencia: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const user = ctx.user as any;
+      const op = await getOperacaoById(input.operacaoId);
+      if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+      if (user.perfil !== "admin" && (op as any).assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+      // Buscar última análise documental
+      const analises = await getAnalisesByOperacao(input.operacaoId);
+      const analiseAtiva = analises
+        .filter((a) => a.camada === "documental")
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+      return {
+        analisandoIa: (op as any).analisandoIa ?? false,
+        progressoIa: (op as any).progressoIa ?? 0,
+        statusProcessamento: analiseAtiva?.statusProcessamento ?? "idle",
+        resultado: analiseAtiva?.statusProcessamento === "concluido" ? analiseAtiva.resultadoJson : null,
+        erro: analiseAtiva?.statusProcessamento === "erro" ? analiseAtiva.erroProcessamento : null,
+      };
+    }),
+
+  // ─── Iniciar conferência assíncrona (não bloqueia UI) ───────────────────────
+  iniciarConferencia: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const user = ctx.user as any;
+      checkIaRateLimit(user.id);
+      const op = await getOperacaoById(input.operacaoId);
+      if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+      if (user.perfil !== "admin" && (op as any).assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+      // Verificar se já está analisando
+      if ((op as any).analisandoIa) {
+        return { iniciado: false, mensagem: "Análise já em andamento" };
+      }
+
+      const docs = await getDocumentosByOperacao(input.operacaoId);
+      const docsAtivos = docs.filter((d: any) => !d.naoAplicavel);
+      const docsEnviados = docsAtivos.filter((d: any) => d.arquivoUrl);
+
+      if (docsEnviados.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum documento enviado. Envie os documentos antes de conferir." });
+      }
+
+      // Marcar como analisando e retornar imediatamente
+      await updateOperacao(input.operacaoId, { analisandoIa: true, progressoIa: 5 } as any);
+      await createAnaliseIa({ operacaoId: input.operacaoId, camada: "documental", statusProcessamento: "processando", geradoPor: user.id, modeloUtilizado: "built-in-llm" });
+
+      // Disparar análise em background (sem await)
+      setImmediate(async () => {
+        try {
+          // Progresso: 10% — buscando versões
+          await updateOperacao(input.operacaoId, { progressoIa: 10 } as any);
+
+          const todasVersoes: Record<number, string[]> = {};
+          for (const doc of docsEnviados) {
+            try {
+              const versoes = await getVersoesDocumento(doc.id);
+              todasVersoes[doc.id] = versoes.map((v: any) => v.arquivoUrl).filter(Boolean);
+            } catch {
+              todasVersoes[doc.id] = doc.arquivoUrl ? [doc.arquivoUrl] : [];
+            }
+          }
+
+          // Progresso: 25% — preparando análise
+          await updateOperacao(input.operacaoId, { progressoIa: 25 } as any);
+
+          const docsPendentes = docsAtivos.filter((d: any) => !d.arquivoUrl);
+
+          const systemPrompt = `Você é um Analista Documental Sênior da Ativa Soluções, especializado em crédito com garantia real (Home Equity, Auto Equity, Rural Equity, Imóvel em Construção).
+
+SUA MISSÃO: Realizar pré-análise documental completa, extrair dados estruturados e gerar inteligência operacional.
+
+INSTRUÇÃO FUNDAMENTAL: Você receberá os arquivos reais dos documentos (PDFs e imagens). Leia o CONTEÚDO REAL de cada arquivo — não apenas o nome do campo. Identifique o tipo real do documento pelo seu conteúdo. NUNCA avalie apenas pelo nome do campo.
+
+=== CAMADA 1: ANÁLISE DOCUMENTAL ===
+PARA CADA DOCUMENTO ANALISE:
+1. Tipo real: leia o conteúdo e identifique o tipo real (CNH, RG, CPF, Matrícula, IPTU, Extrato Bancário, Holerite, IRPF, Certidão, Escritura, etc.)
+2. Correspondência: o documento enviado é realmente o que o campo solicita?
+3. Legibilidade: está legível, sem cortes, sem partes ilegíveis?
+4. Validade: está dentro do prazo? (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
+5. Pertinência ao titular: CPF/nome bate com o tomador?
+6. Completude: está completo ou faltam páginas?
+7. Duplicidade: o mesmo documento foi enviado em campos diferentes?
+
+SEMÁFORO: verde=válido | amarelo=ressalva | vermelho=ausente/vencido/ilegível/incorreto
+
+=== CAMADA 2: PERFILAMENTO DO TOMADOR ===
+Extraia: nome_completo, cpf, rg, data_nascimento, estado_civil, telefone, email, endereco_residencial, profissao, empresa, participacao_societaria, renda_mensal_estimada, faturamento_mensal, saldo_medio_estimado, movimentacao_financeira, banco, renda_declarada, patrimonio_aparente
+
+=== CAMADA 3: PERFILAMENTO DA GARANTIA ===
+IMÓVEL: matricula_imovel, cartorio, iptu, area_total, area_construida, onus, alienacao, hipoteca, penhora, liquidez_aparente, endereco_imovel, cidade_imovel, uf_imovel, titularidade
+RURAL: hectares, car, ccir, itr, atividade_explorada, produtividade_aparente
+VEÍCULO: marca, modelo, ano_veiculo, placa, renavam, alienacao_veiculo, debitos_veiculo
+
+=== CAMADA 4: LEITURA OPERACIONAL ===
+perfil_patrimonial, perfil_financeiro, grau_organizacao_documental (alto/médio/baixo), complexidade_operacao (simples/média/complexa), mitigadores_risco [], fragilidades [], aderencia_bancaria_aparente (alta/média/baixa)
+
+RETORNE JSON ESTRITAMENTE NESTE FORMATO:
+{"documentos":[{"id":0,"nome":"","semaforo":"verde","tipo_identificado":"","legivel":true,"pertence_ao_cliente":null,"observacao":"","dados_extraidos":{"titular_identificado":null,"data_emissao":null,"validade":null,"numero_documento":null}}],"dados_extraidos_operacao":{"nome_completo":null,"cpf":null,"rg":null,"data_nascimento":null,"estado_civil":null,"telefone":null,"email":null,"endereco_residencial":null,"profissao":null,"empresa":null,"participacao_societaria":null,"renda_mensal_estimada":null,"faturamento_mensal":null,"saldo_medio_estimado":null,"movimentacao_financeira":null,"banco":null,"renda_declarada":null,"patrimonio_aparente":null,"matricula_imovel":null,"cartorio":null,"iptu":null,"area_total":null,"area_construida":null,"onus":null,"alienacao":null,"hipoteca":null,"penhora":null,"liquidez_aparente":null,"endereco_imovel":null,"cidade_imovel":null,"uf_imovel":null,"titularidade":null,"hectares":null,"car":null,"ccir":null,"itr":null,"atividade_explorada":null,"produtividade_aparente":null,"marca":null,"modelo":null,"ano_veiculo":null,"placa":null,"renavam":null,"alienacao_veiculo":null,"debitos_veiculo":null},"leitura_operacional":{"perfil_patrimonial":null,"perfil_financeiro":null,"grau_organizacao_documental":null,"complexidade_operacao":null,"mitigadores_risco":[],"fragilidades":[],"aderencia_bancaria_aparente":null},"pendencias_criticas":[],"pendencias_secundarias":[],"documentos_ausentes":[],"situacao_geral":"Pendências secundárias","pode_prosseguir":true,"resumo_documental":""}
+RESPONDA APENAS com JSON válido.`;
+
+          const contentParts: any[] = [{
+            type: "text",
+            text: `Pré-análise documental da operação ${(op as any).codigoOperacao}.\nProduto: ${(op as any).produto} | Cliente: ${(op as any).nomeCliente} (CPF: ${(op as any).cpf}) | Estado Civil: ${(op as any).estadoCivil} | Valor: R$ ${Number((op as any).valorSolicitado).toLocaleString("pt-BR")}\nCHECKLIST (${docsAtivos.length} ativos):\n${docsAtivos.map((d: any) => `- [${d.arquivoUrl ? "ENVIADO" : "PENDENTE"}] ID:${d.id} | ${d.nomeDocumento}`).join("\n")}\nAUSENTES: ${docsPendentes.map((d: any) => d.nomeDocumento).join(", ") || "Nenhum"}`,
+          }];
+
+          let arquivosAdicionados = 0;
+          for (const doc of docsEnviados) {
+            if (arquivosAdicionados >= 10) break;
+            const urls = todasVersoes[doc.id] ?? (doc.arquivoUrl ? [doc.arquivoUrl] : []);
+            const urlRecente = urls[0];
+            if (!urlRecente) continue;
+            const publicUrl = buildPublicUrl(urlRecente);
+            const mimeType = urlRecente.toLowerCase().includes(".pdf") ? "application/pdf" : undefined;
+            if (mimeType) contentParts.push({ type: "file_url", file_url: { url: publicUrl, mime_type: mimeType } });
+            else contentParts.push({ type: "image_url", image_url: { url: publicUrl, detail: "high" } });
+            contentParts.push({ type: "text", text: `[Documento: ID=${doc.id} | ${doc.nomeDocumento}]` });
+            arquivosAdicionados++;
+          }
+
+          // Progresso: 40% — chamando IA
+          await updateOperacao(input.operacaoId, { progressoIa: 40 } as any);
+
+          const response = await invokeLLM({ messages: [{ role: "system", content: systemPrompt }, { role: "user", content: contentParts }] });
+
+          // Progresso: 80% — processando resultado
+          await updateOperacao(input.operacaoId, { progressoIa: 80 } as any);
+
+          const rawContent = response?.choices?.[0]?.message?.content;
+          const conteudo = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "{}");
+          const resultado = extrairJSON(conteudo);
+
+          const podeProsseguir = resultado.pode_prosseguir === true;
+          const novoStatusMacro = podeProsseguir ? "Documentação completa" : "Aguardando documentos";
+
+          await updateOperacao(input.operacaoId, {
+            statusValidacaoIa: podeProsseguir ? "Validado" : "Pendência encontrada",
+            statusMacro: novoStatusMacro,
+            analisandoIa: false,
+            progressoIa: 100,
+          } as any);
+          await addHistoricoStatus({ operacaoId: input.operacaoId, statusAnterior: (op as any).statusMacro, statusNovo: novoStatusMacro, alteradoPor: user.id });
+
+          // Salvar dados extraídos
+          if (resultado.dados_extraidos_operacao || resultado.leitura_operacional) {
+            const jsonEstruturado = {
+              cliente: resultado.dados_extraidos_operacao ?? {},
+              garantia: { matricula_imovel: resultado.dados_extraidos_operacao?.matricula_imovel, cartorio: resultado.dados_extraidos_operacao?.cartorio, iptu: resultado.dados_extraidos_operacao?.iptu, area_total: resultado.dados_extraidos_operacao?.area_total, onus: resultado.dados_extraidos_operacao?.onus, alienacao: resultado.dados_extraidos_operacao?.alienacao, hectares: resultado.dados_extraidos_operacao?.hectares, car: resultado.dados_extraidos_operacao?.car, marca: resultado.dados_extraidos_operacao?.marca, modelo: resultado.dados_extraidos_operacao?.modelo, placa: resultado.dados_extraidos_operacao?.placa },
+              financeiro: { renda_mensal_estimada: resultado.dados_extraidos_operacao?.renda_mensal_estimada, faturamento_mensal: resultado.dados_extraidos_operacao?.faturamento_mensal, saldo_medio_estimado: resultado.dados_extraidos_operacao?.saldo_medio_estimado, renda_declarada: resultado.dados_extraidos_operacao?.renda_declarada, banco: resultado.dados_extraidos_operacao?.banco },
+              documentacao: { situacao_geral: resultado.situacao_geral, pode_prosseguir: resultado.pode_prosseguir, checklist_total: docsAtivos.length, checklist_concluidos: docsEnviados.length },
+              risco: resultado.leitura_operacional ?? {},
+              pendencias: { criticas: resultado.pendencias_criticas ?? [], secundarias: resultado.pendencias_secundarias ?? [], ausentes: resultado.documentos_ausentes ?? [] },
+            };
+            await updateOperacao(input.operacaoId, { perfilExtraidoJson: jsonEstruturado } as any);
+          }
+
+          // Salvar resultado na análise
+          const analisesAtual = await getAnalisesByOperacao(input.operacaoId);
+          const analiseId = analisesAtual.filter((a) => a.statusProcessamento === "processando" && a.camada === "documental").sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]?.id;
+          if (analiseId) {
+            await updateAnaliseIa(analiseId, { resultadoJson: resultado, resultadoTexto: conteudo, tokensConsumidos: response?.usage?.total_tokens ?? 0, statusProcessamento: "concluido", modeloUtilizado: response?.model ?? "llm" });
+          }
+
+          if (podeProsseguir) {
+            const admins = await getAdmins();
+            for (const admin of admins) {
+              await createNotificacao({ usuarioId: admin.id, operacaoId: input.operacaoId, tipo: "documentacao_completa", mensagem: `Documentação de ${(op as any).nomeCliente} (${(op as any).codigoOperacao}) validada pela IA.` });
+            }
+          }
+        } catch (err: any) {
+          console.error("[iniciarConferencia] Erro em background:", err.message);
+          await updateOperacao(input.operacaoId, { analisandoIa: false, progressoIa: 0 } as any);
+          const analisesErr = await getAnalisesByOperacao(input.operacaoId);
+          const analiseErrId = analisesErr.filter((a) => a.statusProcessamento === "processando" && a.camada === "documental").sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]?.id;
+          if (analiseErrId) await updateAnaliseIa(analiseErrId, { statusProcessamento: "erro", erroProcessamento: err.message });
+        }
+      });
+
+      return { iniciado: true, mensagem: "Análise iniciada em background. Use statusConferencia para acompanhar o progresso." };
+    }),
+
   // ─── Conferência documental (consultor — Etapa 3) ──────────────────────────
   conferirDocumentos: protectedProcedure
     .input(z.object({ operacaoId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const user = ctx.user as any;
+      checkIaRateLimit(user.id);
       const op = await getOperacaoById(input.operacaoId);
       if (!op) throw new TRPCError({ code: "NOT_FOUND" });
       if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
