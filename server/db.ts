@@ -333,7 +333,7 @@ export async function getHistoricoByOperacao(operacaoId: number) {
     .where(eq(historicoStatusOperacao.operacaoId, operacaoId))
     .orderBy(desc(historicoStatusOperacao.createdAt));
   // Enriquecer com nome do usuário
-  const userIds = [...new Set(rows.map((r) => r.alteradoPor).filter(Boolean))];
+  const userIds = Array.from(new Set(rows.map((r) => r.alteradoPor).filter(Boolean)));
   const userMap: Record<number, string> = {};
   if (userIds.length > 0) {
     const usersResult = await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds));

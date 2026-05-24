@@ -65,9 +65,9 @@ function checkIaRateLimit(userId: number): void {
 // Limpar entradas expiradas a cada 5 minutos
 setInterval(() => {
   const now = Date.now();
-  for (const [key, val] of iaRateLimitMap.entries()) {
+  Array.from(iaRateLimitMap.entries()).forEach(([key, val]) => {
     if (now >= val.resetAt) iaRateLimitMap.delete(key);
-  }
+  });
 }, 300_000);
 
 // Helper: construir URL pública para o LLM
