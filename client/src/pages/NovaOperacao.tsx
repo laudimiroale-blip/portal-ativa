@@ -1755,6 +1755,7 @@ function Etapa4ResumoDefesa({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const utils = trpc.useUtils();
   const { data: ops } = trpc.operacoes.listar.useQuery({ busca: codigoOperacao });
   const op = ops?.find((o) => o.codigoOperacao === codigoOperacao);
   const operacaoId = op?.id ?? operacaoIdProp;
@@ -1763,7 +1764,8 @@ function Etapa4ResumoDefesa({
   const gerarDefesaMutation = trpc.ia.gerarDefesaComercial.useMutation();
   const atualizarMutation = trpc.operacoes.atualizar.useMutation();
 
-  const [perfil, setPerfil] = useState<{ success: boolean; perfil: Record<string, string> } | null>(null);
+  // perfilLocal: armazena o perfil retornado pela mutation para exibir imediatamente sem esperar refetch
+  const [perfilLocal, setPerfilLocal] = useState<{ cliente: Record<string, any>; financeiro: Record<string, any>; garantia: Record<string, any>; risco: Record<string, any> } | null>(null);
   const [defesa, setDefesa] = useState<string>("");
   const [editandoDefesa, setEditandoDefesa] = useState(false);
   const [defesaEditada, setDefesaEditada] = useState("");
@@ -1772,10 +1774,7 @@ function Etapa4ResumoDefesa({
   const [extraindo, setExtraindo] = useState(false);
   const [defesaAprovada, setDefesaAprovada] = useState(false);
 
-  const perfilExistente = (op as any)?.perfilExtraidoJson as Record<string, string> | null;
   const defesaExistente = (op as any)?.defesaComercial as string | null;
-
-  const perfilAtual = perfil ? { perfil: perfil.perfil, garantia: {} as Record<string, string> } : (perfilExistente ? { perfil: perfilExistente, garantia: {} as Record<string, string> } : null);
   const defesaAtual = defesa || defesaExistente || "";
 
   const handleExtrairPerfil = async () => {
@@ -1783,7 +1782,16 @@ function Etapa4ResumoDefesa({
     setExtraindo(true);
     try {
       const resultado = await extrairPerfilMutation.mutateAsync({ operacaoId });
-      setPerfil({ success: true, perfil: resultado.perfil ?? resultado });
+      // Usar perfil retornado diretamente para exibir sem aguardar refetch
+      const p = resultado.perfil as any;
+      setPerfilLocal({
+        cliente: p?.cliente ?? {},
+        financeiro: p?.financeiro ?? {},
+        garantia: p?.garantia ?? {},
+        risco: p?.risco ?? {},
+      });
+      // Invalidar cache para que op.perfilExtraidoJson seja atualizado
+      await utils.operacoes.listar.invalidate();
       toast.success("Perfil extraído com sucesso!");
     } catch (err: any) {
       toast.error("Erro ao extrair perfil: " + err.message);
@@ -1886,12 +1894,14 @@ function Etapa4ResumoDefesa({
 
       {/* Perfil do Tomador — JSON Estruturado */}
       {(() => {
-        const pj = (op as any)?.perfilExtraidoJson as Record<string, any> | null;
-        const clienteData = pj?.cliente ?? pj;
+        // Prioridade: perfilLocal (retornado pela mutation) > perfilExtraidoJson (salvo no banco)
+        const pjBanco = (op as any)?.perfilExtraidoJson as Record<string, any> | null;
+        const pj = perfilLocal ?? pjBanco;
+        const clienteData = pj?.cliente ?? (pj && !pj.cliente ? pj : null);
         const financeiroData = pj?.financeiro ?? {};
         const garantiaData = pj?.garantia ?? {};
         const riscoData = pj?.risco ?? {};
-        const temDados = pj && Object.values(clienteData ?? {}).some((v) => v !== null && v !== "");
+        const temDados = pj && clienteData && Object.values(clienteData).some((v) => v !== null && v !== "");
         return (
           <div className="border border-border/40 rounded-lg overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border/30">

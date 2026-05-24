@@ -309,3 +309,9 @@
 - [x] Melhoria 1: Barra de pesquisa em tempo real no topo do Kanban (filtrar por nome do cliente ou código ATV)
 - [x] Melhoria 2: Justificativa N/A como select (Empresário, Autônomo, Aposentado, Outros) com campo texto livre apenas para "Outros"
 - [x] Melhoria 3: Botão "Reenviar Documento" ao lado de itens reprovados pela IA — substitui arquivo e limpa resultado da IA para aquele item
+
+## Bugs Críticos — Sessão 4
+
+- [x] Bug 1: conferirDocumentos retorna erro — remover response_format json_object, parsing defensivo (extrairJSON), fallback estruturado quando IA não retorna lista de documentos
+- [x] Bug 2: extrairPerfil informa sucesso mas não exibe dados — adicionar perfilLocal + invalidate cache após mutation
+- [x] Integrar dados extraídos pela IA na geração da Defesa Comercial (iptu, escritura, metragem, endereço imóvel, dados do consultor das etapas 1-2)

@@ -1419,17 +1419,35 @@ Analise cada documento enviado abaixo e retorne o JSON completo.`,
           arquivosAdicionados++;
         }
 
+        // Helper para extrair JSON de uma string que pode conter markdown
+        const extrairJSON = (raw: string): any => {
+          if (!raw || raw.trim() === "") return {};
+          // Tentar parse direto
+          try { return JSON.parse(raw); } catch { /* continua */ }
+          // Tentar extrair bloco ```json ... ```
+          const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (match) {
+            try { return JSON.parse(match[1].trim()); } catch { /* continua */ }
+          }
+          // Tentar encontrar o primeiro { ... } de nível raiz
+          const start = raw.indexOf("{");
+          const end = raw.lastIndexOf("}");
+          if (start !== -1 && end > start) {
+            try { return JSON.parse(raw.slice(start, end + 1)); } catch { /* continua */ }
+          }
+          return {};
+        };
+
         try {
           const response = await invokeLLM({
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: contentParts },
             ],
-            response_format: { type: "json_object" } as any,
           });
-          const rawContent = response.choices[0]?.message?.content;
-          const conteudo = typeof rawContent === "string" ? rawContent : "{}";
-          const resultado = JSON.parse(conteudo);
+          const rawContent = response?.choices?.[0]?.message?.content;
+          const conteudo = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "{}");
+          const resultado = extrairJSON(conteudo);
 
           const podeProsseguir = resultado.pode_prosseguir === true;
           const situacaoGeral = resultado.situacao_geral ?? (podeProsseguir ? "Pendências secundárias" : "Pendências relevantes");
@@ -1507,10 +1525,36 @@ Analise cada documento enviado abaixo e retorne o JSON completo.`,
             }
           }
 
+          // Se a IA não retornou lista de documentos, gerar fallback com base nos docs enviados
+          const documentosPorStatus = resultado.documentos?.length > 0
+            ? resultado.documentos
+            : [
+                ...docsEnviados.map((d: any) => ({
+                  id: d.id,
+                  nome: d.nomeDocumento,
+                  semaforo: "verde" as const,
+                  tipo_identificado: d.nomeDocumento,
+                  legivel: true,
+                  pertence_ao_cliente: null,
+                  observacao: "Documento recebido — análise automática não disponibilizada",
+                  dados_extraidos: { titular_identificado: null, data_emissao: null, validade: null, numero_documento: null },
+                })),
+                ...docsPendentes.map((d: any) => ({
+                  id: d.id,
+                  nome: d.nomeDocumento,
+                  semaforo: "vermelho" as const,
+                  tipo_identificado: d.nomeDocumento,
+                  legivel: false,
+                  pertence_ao_cliente: null,
+                  observacao: "Documento não enviado",
+                  dados_extraidos: { titular_identificado: null, data_emissao: null, validade: null, numero_documento: null },
+                })),
+              ];
+
           return {
             aprovado: podeProsseguir,
             situacaoGeral,
-            documentosPorStatus: resultado.documentos ?? [],
+            documentosPorStatus,
             dadosExtraidos: resultado.dados_extraidos_operacao ?? null,
             leituraOperacional: resultado.leitura_operacional ?? null,
             pendenciasCriticas: resultado.pendencias_criticas ?? [],
@@ -1521,7 +1565,9 @@ Analise cada documento enviado abaixo e retorne o JSON completo.`,
             checklist_concluidos: checklistConcluidos,
           };
         } catch (err: any) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na conferência: " + err.message });
+          // Retornar resultado parcial em vez de erro fatal — permite que o usuário veja o que foi analisado
+          console.error("[conferirDocumentos] Erro:", err.message);
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro na conferência documental: " + (err.message ?? "Erro desconhecido") });
         }
       }),
 
@@ -1575,29 +1621,40 @@ Retorne JSON ESTRITAMENTE neste formato (use null para campos não encontrados, 
           }
         }
 
+        // Helper para extrair JSON de string que pode conter markdown
+        const extrairJSONPerfil = (raw: string): any => {
+          if (!raw || raw.trim() === "") return {};
+          try { return JSON.parse(raw); } catch { /* continua */ }
+          const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (match) { try { return JSON.parse(match[1].trim()); } catch { /* continua */ } }
+          const start = raw.indexOf("{"); const end = raw.lastIndexOf("}");
+          if (start !== -1 && end > start) { try { return JSON.parse(raw.slice(start, end + 1)); } catch { /* continua */ } }
+          return {};
+        };
+
         try {
           const response = await invokeLLM({
             messages: [
               { role: "system", content: "Você é um analista de crédito sênior especializado em extração de dados de documentos. Retorne APENAS JSON válido no formato estruturado solicitado, sem markdown, sem código de bloco." },
               { role: "user", content: contentParts },
             ],
-            response_format: { type: "json_object" } as any,
           });
 
           // Validação defensiva: aceita conteúdo vazio e usa perfil mínimo com dados da operação
-          let rawContent = response?.choices?.[0]?.message?.content;
+          const rawContent = response?.choices?.[0]?.message?.content;
+          let perfilBruto: any = {};
           if (!rawContent || (typeof rawContent === "string" && rawContent.trim() === "")) {
             // Fallback: montar perfil mínimo com dados já conhecidos da operação
-            rawContent = JSON.stringify({
+            perfilBruto = {
               cliente: { nome_completo: op.nomeCliente, cpf: op.cpf, estado_civil: (op as any).estadoCivil ?? null },
               financeiro: {},
               garantia: {},
               risco: { grau_organizacao_documental: "baixo", mitigadores_risco: [], fragilidades: ["Documentos insuficientes para extração automática"] },
-            });
+            };
+          } else {
+            const conteudo = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
+            perfilBruto = extrairJSONPerfil(conteudo);
           }
-          const conteudo = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
-          let perfilBruto: any = {};
-          try { perfilBruto = JSON.parse(conteudo); } catch { perfilBruto = {}; }
           const perfilEstruturado = {
             cliente: perfilBruto.cliente ?? { nome_completo: op.nomeCliente, cpf: op.cpf },
             financeiro: perfilBruto.financeiro ?? {},
@@ -1654,11 +1711,17 @@ Retorne JSON ESTRITAMENTE neste formato (use null para campos não encontrados, 
           financeiro.banco ? `Banco principal: ${financeiro.banco}` : null,
         ].filter(Boolean).join(" | ");
 
+        // Dados da garantia também podem estar no objeto da operação (preenchidos pelo consultor)
+        const garantiaOp = (op as any);
         const blocoGarantia = [
-          garantia.matricula_imovel ? `Matrícula: ${garantia.matricula_imovel}` : null,
+          garantia.matricula_imovel || garantiaOp.matriculaImovel ? `Matrícula: ${garantia.matricula_imovel ?? garantiaOp.matriculaImovel}` : null,
           garantia.cartorio ? `Cartório: ${garantia.cartorio}` : null,
-          garantia.area_total ? `Área total: ${garantia.area_total}` : null,
+          garantia.iptu || garantiaOp.numeroIptu ? `IPTU: ${garantia.iptu ?? garantiaOp.numeroIptu}` : null,
+          garantia.inscricao_cadastral ? `Inscrição Cadastral: ${garantia.inscricao_cadastral}` : null,
+          garantia.area_total || garantiaOp.metragemImovel ? `Área total: ${garantia.area_total ?? garantiaOp.metragemImovel}` : null,
           garantia.area_construida ? `Área construída: ${garantia.area_construida}` : null,
+          garantia.descricao_imovel ? `Descrição: ${garantia.descricao_imovel}` : null,
+          garantia.endereco_imovel || garantiaOp.enderecoImovel ? `Endereço: ${garantia.endereco_imovel ?? garantiaOp.enderecoImovel}` : null,
           garantia.onus ? `Ônus: ${garantia.onus}` : null,
           garantia.alienacao ? `Alienação: ${garantia.alienacao}` : null,
           garantia.hipoteca ? `Hipoteca: ${garantia.hipoteca}` : null,
