@@ -204,7 +204,7 @@ export default function DetalheOperacao({ params }: Props) {
           {activeTab === "documentos" && <TabDocumentos operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} />}
           {activeTab === "dados" && <TabDados operacao={operacao} isAdmin={isAdmin} onRefetch={refetch} userId={(user as any)?.id} />}
           {activeTab === "ia" && isAdmin && <TabAnaliseIA operacaoId={operacaoId} operacao={operacao} userId={(user as any)?.id} />}
-          {activeTab === "ifs" && <TabIFs operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} produto={(operacao as any)?.produto} />}
+          {activeTab === "ifs" && <TabIFs operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} produto={(operacao as any)?.produto} valorSolicitado={Number((operacao as any)?.valorSolicitado) || undefined} valorGarantia={Number((operacao as any)?.valorGarantia) || undefined} prazo={Number((operacao as any)?.prazo) || undefined} />}
           {activeTab === "historico" && <TabHistorico operacaoId={operacaoId} />}
         </div>
       </div>
@@ -816,13 +816,23 @@ function TabAnaliseIA({ operacaoId, operacao, userId }: { operacaoId: number; op
 
 // ─── Tab IFs ──────────────────────────────────────────────────────────────────
 
-function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; isAdmin: boolean; userId: number; produto?: string }) {
+function TabIFs({ operacaoId, isAdmin, userId, produto, valorSolicitado, valorGarantia, prazo }: { operacaoId: number; isAdmin: boolean; userId: number; produto?: string; valorSolicitado?: number; valorGarantia?: number; prazo?: number }) {
   const { data: ifs, isLoading, refetch } = trpc.ifs.listar.useQuery({ operacaoId });
-  // Usa filtro por produto quando disponível; fallback para lista completa
-  const { data: ifsAtivas } = trpc.ifCadastros.listarAtivasPorProduto.useQuery(
-    { produto: produto ?? undefined },
-    { enabled: isAdmin }
+  // Calcular LTV estimado
+  const ltv = valorSolicitado && valorGarantia && valorGarantia > 0
+    ? Math.round((valorSolicitado / valorGarantia) * 100 * 10) / 10
+    : undefined;
+  // Motor bancário inteligente: filtrar IFs compatíveis por produto/LTV/valor/prazo
+  const { data: ifsCompativeis } = trpc.ifCadastros.listarCompativeis.useQuery(
+    { produto: produto ?? "", valorSolicitado, ltv, prazo },
+    { enabled: isAdmin && !!produto }
   );
+  // Fallback para lista simples quando produto não definido
+  const { data: ifsAtivasFallback } = trpc.ifCadastros.listarAtivas.useQuery(
+    undefined,
+    { enabled: isAdmin && !produto }
+  );
+  const ifsAtivas = produto ? (ifsCompativeis ?? []) : (ifsAtivasFallback ?? []);
   const criarMutation = trpc.ifs.criar.useMutation({
     onSuccess: () => { refetch(); setShowForm(false); setNovaIF({ ifCadastroId: 0, dataEnvio: "", prazoRetornoEstimado: "", proximaAcao: "" }); toast.success("IF adicionada e distribuição registrada!"); },
     onError: (e) => toast.error("Erro: " + e.message),
@@ -911,20 +921,21 @@ function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; 
             )}
           </div>
 
-          {/* Aviso de filtro por produto */}
+          {/* Aviso de filtro por produto + motor bancário */}
           {produto && (
             <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-primary/8 border border-primary/20">
               <Building2 className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
               <p className="text-xs text-primary/80">
-                Exibindo apenas IFs com condições cadastradas para <strong>{produto}</strong>.
-                {(ifsAtivas ?? []).length === 0 ? (
-                  <> Nenhuma IF ativa possui esse produto —{" "}
+                Motor bancário ativo para <strong>{produto}</strong>.
+                {ltv !== undefined && <> LTV estimado: <strong>{ltv}%</strong>.</>}
+                {(ifsAtivas as any[]).filter((i: any) => i.compativel !== false).length === 0 ? (
+                  <> Nenhuma IF compatível encontrada —{" "}
                     <Link href="/ifs" className="underline underline-offset-2 font-medium hover:text-primary transition-colors">
-                      cadastre condições na tela de IFs
+                      ajuste as condições na tela de IFs
                     </Link>.
                   </>
                 ) : (
-                  ` ${(ifsAtivas ?? []).length} IF${(ifsAtivas ?? []).length !== 1 ? "s" : ""} disponível${(ifsAtivas ?? []).length !== 1 ? "is" : ""}.`
+                  ` ${(ifsAtivas as any[]).filter((i: any) => i.compativel !== false).length} compatível${(ifsAtivas as any[]).filter((i: any) => i.compativel !== false).length !== 1 ? "is" : ""} · ${(ifsAtivas as any[]).filter((i: any) => i.compativel === false).length} incompatível${(ifsAtivas as any[]).filter((i: any) => i.compativel === false).length !== 1 ? "is" : ""}.`
                 )}
               </p>
             </div>
@@ -942,34 +953,45 @@ function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; 
                 </div>
               </div>
               <div className="rounded-lg border border-border overflow-hidden divide-y divide-border/40">
-                {(ifsAtivas ?? []).map((if_) => {
+                {(ifsAtivas as any[]).map((if_: any) => {
                   const checked = selecionadas.includes(if_.id);
-                  const taxa = (if_ as any).taxaMinima;
-                  const prazo = (if_ as any).prazoMaximo;
+                  const taxa = if_.taxaMinima;
+                  const prazoMax = if_.prazoMaximo;
+                  const compativel = if_.compativel !== false; // undefined = sem motor (fallback)
+                  const motivo = if_.motivoIncompatibilidade;
                   return (
                     <label
                       key={if_.id}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors select-none",
-                        checked ? "bg-primary/8" : "hover:bg-muted/30"
+                        "flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors select-none",
+                        !compativel ? "opacity-60 bg-red-500/5" : checked ? "bg-primary/8" : "hover:bg-muted/30"
                       )}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => toggleSelecionada(if_.id)}
-                        className="accent-primary w-3.5 h-3.5 flex-shrink-0"
+                        onChange={() => compativel && toggleSelecionada(if_.id)}
+                        disabled={!compativel}
+                        className="accent-primary w-3.5 h-3.5 flex-shrink-0 mt-0.5"
                       />
-                      <span className="flex-1 text-sm text-foreground">{if_.nome}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className={cn("text-sm", compativel ? "text-foreground" : "text-muted-foreground line-through")}>{if_.nome}</span>
+                        {!compativel && motivo && (
+                          <p className="text-[10px] text-red-400 mt-0.5 leading-tight">{motivo}</p>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {compativel && (
+                          <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">Compatível</span>
+                        )}
                         {taxa && (
                           <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
-                            a partir de {Number(taxa).toFixed(2)}% a.m.
+                            {Number(taxa).toFixed(2)}% a.m.
                           </span>
                         )}
-                        {prazo && (
+                        {prazoMax && (
                           <span className="text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded-full">
-                            até {prazo} meses
+                            até {prazoMax}m
                           </span>
                         )}
                       </div>
@@ -993,8 +1015,10 @@ function TabIFs({ operacaoId, isAdmin, userId, produto }: { operacaoId: number; 
                       ? "Nenhuma IF disponível para este produto"
                       : "Selecione uma IF parceira..."}
                   </option>
-                  {(ifsAtivas ?? []).map((if_) => (
-                    <option key={if_.id} value={if_.id}>{if_.nome}</option>
+                  {(ifsAtivas as any[]).map((if_: any) => (
+                    <option key={if_.id} value={if_.id} disabled={if_.compativel === false}>
+                      {if_.compativel === false ? `⚠ ${if_.nome} (incompatível)` : if_.nome}
+                    </option>
                   ))}
                 </select>
               </div>

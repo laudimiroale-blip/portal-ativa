@@ -1779,9 +1779,12 @@ function Etapa4ResumoDefesa({
   const extrairPerfilMutation = trpc.ia.extrairPerfil.useMutation();
   const gerarDefesaMutation = trpc.ia.gerarDefesaComercial.useMutation();
   const atualizarMutation = trpc.operacoes.atualizar.useMutation();
+  const editarDadosMutation = trpc.garantias.editarDadosExtraidos.useMutation();
 
   // perfilLocal: armazena o perfil retornado pela mutation para exibir imediatamente sem esperar refetch
   const [perfilLocal, setPerfilLocal] = useState<{ cliente: Record<string, any>; financeiro: Record<string, any>; garantia: Record<string, any>; risco: Record<string, any> } | null>(null);
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [perfilEditado, setPerfilEditado] = useState<Record<string, any>>({});
   const [defesa, setDefesa] = useState<string>("");
   const [editandoDefesa, setEditandoDefesa] = useState(false);
   const [defesaEditada, setDefesaEditada] = useState("");
@@ -1789,6 +1792,29 @@ function Etapa4ResumoDefesa({
   const [showComentario, setShowComentario] = useState(false);
   const [extraindo, setExtraindo] = useState(false);
   const [defesaAprovada, setDefesaAprovada] = useState(false);
+
+  const handleSalvarEdicaoPerfil = async () => {
+    if (!operacaoId) return;
+    try {
+      await editarDadosMutation.mutateAsync({ operacaoId, dados: perfilEditado });
+      // Atualizar perfilLocal com os dados editados
+      setPerfilLocal((prev) => {
+        if (!prev) return prev;
+        const merged: Record<string, any> = { ...perfilEditado };
+        return {
+          cliente: { ...prev.cliente, ...Object.fromEntries(Object.entries(merged).filter(([k]) => Object.keys(prev.cliente).includes(k) || ["nome_completo","cpf","rg","data_nascimento","estado_civil","telefone","email","endereco_residencial","profissao","empresa"].includes(k))) },
+          financeiro: { ...prev.financeiro, ...Object.fromEntries(Object.entries(merged).filter(([k]) => ["renda_mensal_estimada","faturamento_mensal","saldo_medio_estimado","movimentacao_financeira","renda_declarada","banco"].includes(k))) },
+          garantia: { ...prev.garantia, ...Object.fromEntries(Object.entries(merged).filter(([k]) => ["matricula_imovel","cartorio","iptu","area_total","area_construida","descricao_imovel","onus","alienacao","hipoteca","penhora","liquidez_aparente","hectares","car","marca","modelo","placa"].includes(k))) },
+          risco: prev.risco,
+        };
+      });
+      await utils.operacoes.listar.invalidate();
+      setEditandoPerfil(false);
+      toast.success("Dados atualizados com sucesso!");
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
+    }
+  };
 
   const defesaExistente = (op as any)?.defesaComercial as string | null;
   const defesaAtual = defesa || defesaExistente || "";
@@ -1926,19 +1952,72 @@ function Etapa4ResumoDefesa({
                 <h3 className="text-sm font-semibold text-foreground">Perfil Extraído pela IA</h3>
                 {temDados && <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">Disponível</span>}
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleExtrairPerfil}
-                disabled={extraindo || !operacaoId}
-                className="gap-1.5 text-xs"
-              >
-                {extraindo ? <Loader2 className="w-3 h-3 animate-spin" /> : temDados ? <RefreshCw className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
-                {temDados ? "Reextrair" : "Extrair com IA"}
-              </Button>
+              <div className="flex items-center gap-2">
+                {temDados && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (!editandoPerfil) {
+                        // Flatten todos os campos para editar
+                        const flat: Record<string, any> = { ...clienteData, ...financeiroData, ...garantiaData };
+                        setPerfilEditado(flat);
+                      }
+                      setEditandoPerfil(!editandoPerfil);
+                    }}
+                    className="h-7 px-2 gap-1 text-xs text-muted-foreground"
+                  >
+                    <Edit3 className="w-3 h-3" />{editandoPerfil ? "Cancelar" : "Editar Dados"}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExtrairPerfil}
+                  disabled={extraindo || !operacaoId}
+                  className="gap-1.5 text-xs"
+                >
+                  {extraindo ? <Loader2 className="w-3 h-3 animate-spin" /> : temDados ? <RefreshCw className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+                  {temDados ? "Reextrair" : "Extrair com IA"}
+                </Button>
+              </div>
             </div>
             {temDados ? (
               <div className="divide-y divide-border/20">
+                {/* Modo de edição inline */}
+                {editandoPerfil ? (
+                  <div className="p-4 space-y-4">
+                    <p className="text-xs text-muted-foreground">Edite os campos abaixo. Campos em branco serão mantidos como estão.</p>
+                    {[{ titulo: "Identificação do Tomador", dados: clienteData }, { titulo: "Capacidade Financeira", dados: financeiroData }, { titulo: "Dados da Garantia", dados: garantiaData }].map(({ titulo, dados }) => (
+                      Object.keys(dados ?? {}).length > 0 ? (
+                        <div key={titulo}>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{titulo}</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {Object.entries(dados ?? {}).map(([k, v]) => (
+                              <div key={k}>
+                                <label className="text-[10px] text-muted-foreground block mb-0.5 capitalize">{k.replace(/_/g, " ")}</label>
+                                <Input
+                                  value={perfilEditado[k] ?? (v !== null ? String(v) : "")}
+                                  onChange={(e) => setPerfilEditado((p) => ({ ...p, [k]: e.target.value }))}
+                                  className="h-7 text-xs bg-background/50"
+                                  placeholder={v !== null ? String(v) : ""}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null
+                    ))}
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button size="sm" variant="outline" onClick={() => setEditandoPerfil(false)} className="text-xs">Cancelar</Button>
+                      <Button size="sm" onClick={handleSalvarEdicaoPerfil} disabled={editarDadosMutation.isPending} className="btn-primary gap-1.5 text-xs">
+                        {editarDadosMutation.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                        Salvar Alterações
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 {/* Bloco: Identificação */}
                 {Object.values(clienteData ?? {}).some((v) => v !== null && v !== "") && (
                   <div className="p-4">
@@ -1981,6 +2060,7 @@ function Etapa4ResumoDefesa({
                     </div>
                   </div>
                 )}
+                  </>)}
                 {/* Bloco: Leitura Operacional */}
                 {(riscoData.perfil_patrimonial || riscoData.perfil_financeiro || riscoData.aderencia_bancaria_aparente) && (
                   <div className="p-4 bg-amber-500/5">
@@ -2025,6 +2105,21 @@ function Etapa4ResumoDefesa({
                   className="h-7 px-2 gap-1 text-xs text-muted-foreground"
                 >
                   <Copy className="w-3 h-3" />Copiar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    const texto = editandoDefesa ? defesaEditada : defesaAtual;
+                    const win = window.open("", "_blank");
+                    if (!win) { toast.error("Permita pop-ups para exportar o PDF."); return; }
+                    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Defesa Comercial</title><style>body{font-family:Arial,sans-serif;max-width:800px;margin:40px auto;padding:0 24px;color:#111;line-height:1.7}h1{font-size:18px;border-bottom:2px solid #c8a84b;padding-bottom:8px;margin-bottom:24px}pre{white-space:pre-wrap;font-family:inherit;font-size:14px}footer{margin-top:40px;font-size:11px;color:#888;border-top:1px solid #ddd;padding-top:8px}@media print{body{margin:20px}}</style></head><body><h1>Defesa Comercial</h1><pre>${texto.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre><footer>Gerado por Portal Ativa &mdash; ${new Date().toLocaleDateString("pt-BR")}</footer></body></html>`);
+                    win.document.close();
+                    setTimeout(() => { win.print(); }, 400);
+                  }}
+                  className="h-7 px-2 gap-1 text-xs text-muted-foreground"
+                >
+                  <Download className="w-3 h-3" />Exportar PDF
                 </Button>
                 <Button
                   size="sm"

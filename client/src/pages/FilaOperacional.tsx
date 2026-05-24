@@ -111,7 +111,7 @@ const KANBAN_COLUNAS: KanbanColuna[] = [
     id: "liberacao",
     label: "Liberação",
     descricao: "TED/Pix · Operação concluída",
-    statuses: ["Aprovada", "Reprovada", "Cancelada"],
+    statuses: ["Aprovada", "Reprovada", "Cancelada", "Arquivada"],
     cor: "bg-emerald-500/10",
     corBorda: "border-emerald-500/30",
     corHeader: "text-emerald-400",

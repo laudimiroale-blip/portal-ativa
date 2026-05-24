@@ -106,4 +106,111 @@ export const ifCadastrosRouter = router({
       await deleteCondicaoIF(input.id);
       return { success: true };
     }),
+
+  // ─── Motor de distribuição bancária inteligente ────────────────────────────────────────────────────────
+  listarCompativeis: protectedProcedure
+    .input(z.object({
+      produto: z.string(),
+      valorSolicitado: z.number().optional(),  // em reais
+      ltv: z.number().optional(),              // em percentual (ex: 45.5)
+      prazo: z.number().optional(),            // em meses
+    }))
+    .query(async ({ input }) => {
+      const todasIFs = await getAllIFsCadastradas();
+      const ativasComProduto = todasIFs.filter((if_: any) => !if_.deletedAt && if_.status === "Ativa");
+
+      // Buscar condições de cada IF para o produto solicitado
+      const resultado: Array<{
+        id: number;
+        nome: string;
+        cnpj: string;
+        compativel: boolean;
+        motivoIncompatibilidade?: string;
+        taxaMinima?: string | null;
+        taxaMaxima?: string | null;
+        ltvMaximo?: string | null;
+        prazoMinimo?: number | null;
+        prazoMaximo?: number | null;
+        valorMinimo?: string | null;
+        valorMaximo?: string | null;
+      }> = [];
+
+      for (const if_ of ativasComProduto as any[]) {
+        const condicoes = await getCondicoesByIF(if_.id);
+        const condicaoProduto = condicoes.find((c: any) => c.produto === input.produto);
+
+        if (!condicaoProduto) {
+          resultado.push({
+            id: if_.id,
+            nome: if_.nome,
+            cnpj: if_.cnpj ?? "",
+            compativel: false,
+            motivoIncompatibilidade: `Produto "${input.produto}" não aceito por esta IF`,
+          });
+          continue;
+        }
+
+        const motivos: string[] = [];
+
+        // Verificar LTV
+        if (input.ltv !== undefined && condicaoProduto.ltvMaximo) {
+          const ltvMax = parseFloat(String(condicaoProduto.ltvMaximo));
+          if (!isNaN(ltvMax) && input.ltv > ltvMax) {
+            motivos.push(`LTV ${input.ltv.toFixed(1)}% acima do limite de ${ltvMax}%`);
+          }
+        }
+
+        // Verificar valor mínimo
+        if (input.valorSolicitado !== undefined && condicaoProduto.valorMinimo) {
+          const valMin = parseFloat(String(condicaoProduto.valorMinimo));
+          if (!isNaN(valMin) && input.valorSolicitado < valMin) {
+            motivos.push(`Valor R$ ${input.valorSolicitado.toLocaleString("pt-BR")} abaixo do mínimo de R$ ${valMin.toLocaleString("pt-BR")}`);
+          }
+        }
+
+        // Verificar valor máximo
+        if (input.valorSolicitado !== undefined && condicaoProduto.valorMaximo) {
+          const valMax = parseFloat(String(condicaoProduto.valorMaximo));
+          if (!isNaN(valMax) && input.valorSolicitado > valMax) {
+            motivos.push(`Valor R$ ${input.valorSolicitado.toLocaleString("pt-BR")} acima do máximo de R$ ${valMax.toLocaleString("pt-BR")}`);
+          }
+        }
+
+        // Verificar prazo mínimo
+        if (input.prazo !== undefined && condicaoProduto.prazoMinimo) {
+          if (input.prazo < condicaoProduto.prazoMinimo) {
+            motivos.push(`Prazo ${input.prazo} meses abaixo do mínimo de ${condicaoProduto.prazoMinimo} meses`);
+          }
+        }
+
+        // Verificar prazo máximo
+        if (input.prazo !== undefined && condicaoProduto.prazoMaximo) {
+          if (input.prazo > condicaoProduto.prazoMaximo) {
+            motivos.push(`Prazo ${input.prazo} meses acima do máximo de ${condicaoProduto.prazoMaximo} meses`);
+          }
+        }
+
+        resultado.push({
+          id: if_.id,
+          nome: if_.nome,
+          cnpj: if_.cnpj ?? "",
+          compativel: motivos.length === 0,
+          motivoIncompatibilidade: motivos.length > 0 ? motivos.join(" · ") : undefined,
+          taxaMinima: condicaoProduto.taxaMinima,
+          taxaMaxima: condicaoProduto.taxaMaxima,
+          ltvMaximo: condicaoProduto.ltvMaximo,
+          prazoMinimo: condicaoProduto.prazoMinimo,
+          prazoMaximo: condicaoProduto.prazoMaximo,
+          valorMinimo: condicaoProduto.valorMinimo,
+          valorMaximo: condicaoProduto.valorMaximo,
+        });
+      }
+
+      // Ordenar: compatíveis primeiro, depois incompatíveis
+      return resultado.sort((a, b) => {
+        if (a.compativel && !b.compativel) return -1;
+        if (!a.compativel && b.compativel) return 1;
+        return a.nome.localeCompare(b.nome);
+      });
+    }),
 });

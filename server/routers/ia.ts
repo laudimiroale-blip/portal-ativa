@@ -227,14 +227,25 @@ RETORNE JSON com os campos extraídos. Use null para campos não encontrados. Se
 
 SUA MISSÃO: Realizar pré-análise documental completa, extrair dados estruturados e gerar inteligência operacional.
 
+INSTRUÇÃO FUNDAMENTAL: Você receberá os arquivos reais dos documentos (PDFs e imagens). Leia o CONTEÚO REAL de cada arquivo — não apenas o nome do campo. Identifique o tipo real do documento pelo seu conteúdo (ex: se o arquivo tem "CARTEIRA NACIONAL DE HABILITAÇÃO" impresso, é uma CNH; se tem "MATRÍCULA DO IMÓVEL" e número de matrícula, é uma matrícula). NUNCA avalie apenas pelo nome do campo.
+
 === CAMADA 1: ANÁLISE DOCUMENTAL ===
 PARA CADA DOCUMENTO ANALISE:
-1. Tipo e correspondência: o documento é realmente o que se declara ser?
-2. Legibilidade: está legível, sem cortes, sem partes ilegíveis?
-3. Validade: está dentro do prazo? (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
-4. Pertinência ao titular: pertence ao tomador ou cônjuge declarado?
-5. Completude: está completo ou faltam páginas?
-6. Consistência: dados batem com o restante da operação?
+1. Tipo real: leia o conteúdo e identifique o tipo real do documento (CNH, RG, CPF, Matrícula, IPTU, Extrato Bancário, Holerite, IRPF, Certidão, Escritura, etc.)
+2. Correspondência: o documento enviado é realmente o que o campo solicita?
+3. Legibilidade: está legível, sem cortes, sem partes ilegíveis, sem borramentos?
+4. Validade: está dentro do prazo? (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido; Certidões: máx 90 dias)
+5. Pertinência ao titular: o CPF/nome no documento bate com o tomador ou cônjuge declarado?
+6. Completude: está completo ou faltam páginas/verso?
+7. Consistência: dados do documento batem com os demais documentos da operação?
+8. Duplicidade: o mesmo documento foi enviado em campos diferentes?
+
+DETECÇÃO AUTOMÁTICA:
+- Documento vencido: marcar semaforo=vermelho com motivo "Documento vencido em [data]"
+- CPF/nome divergente: marcar semaforo=vermelho com motivo "CPF/nome não corresponde ao titular"
+- Documento ilegível: marcar semaforo=vermelho com motivo "Imagem ilegível — [detalhe]"
+- Documento incorreto (ex: enviou extrato no campo de matrícula): marcar semaforo=vermelho com motivo "Documento incorreto: enviado [tipo real], esperado [tipo correto]"
+- Documento duplicado: marcar semaforo=amarelo com motivo "Possível duplicata do documento [campo]"
 
 SEMÁFORO:
 - verde: documento válido, legível, completo e dentro do prazo

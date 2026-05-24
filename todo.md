@@ -338,44 +338,39 @@
 - [x] Atualizar server/routers.ts para importar e montar os módulos (+ router ifs inline)
 
 ### Fase 3 — IA Documental Real
-- [ ] Prompt de conferência: instrução explícita para ler conteúdo real (não nome do arquivo)
-- [ ] Prompt: identificar tipo real do documento (CNH, RG, IPTU, matrícula, extrato, etc.)
-- [ ] Prompt: validar legibilidade (imagem nítida, texto legível, sem cortes)
-- [ ] Prompt: detectar documento vencido (CNH, RG, certidões)
-- [ ] Prompt: detectar inconsistência de CPF/nome entre documentos
-- [ ] Prompt: detectar duplicidade de documento (mesmo arquivo em campos diferentes)
-- [ ] Prompt: retornar por documento — status (Aprovado/Pendente/Inválido/Ilegível) + motivo detalhado
-- [ ] Prompt: extrair dados relevantes por tipo (CPF, nome, endereço, validade, número)
+- [x] Prompt de conferência: instrução explícita para ler conteúdo real (não nome do arquivo)
+- [x] Prompt: identificar tipo real do documento (CNH, RG, IPTU, matrícula, extrato, etc.)
+- [x] Prompt: validar legibilidade (imagem nítida, texto legível, sem cortes)
+- [x] Prompt: detectar documento vencido (CNH, RG, certidões)
+- [x] Prompt: detectar inconsistência de CPF/nome entre documentos
+- [x] Prompt: detectar duplicidade de documento (mesmo arquivo em campos diferentes)
+- [x] Prompt: retornar por documento — status (Aprovado/Pendente/Inválido/Ilegível) + motivo detalhado
+- [x] Prompt: extrair dados relevantes por tipo (CPF, nome, endereço, validade, número)
 
 ### Fase 4 — Extração Automática da Garantia por Produto
-- [ ] Home Equity: extrair matrícula, cartório, endereço, cidade, estado, metragem, titularidade, valor venal, IPTU, ônus, alienações, penhoras
-- [ ] Auto Equity: extrair marca, modelo, ano, placa, Renavam, alienação, débitos aparentes
-- [ ] Rural Equity: extrair área (ha), matrícula, CAR, CCIR, ITR, georreferenciamento, produtividade
-- [ ] Salvar dados extraídos na tabela garantias com preenchidoPorIa=true
-- [ ] Permitir edição manual dos campos extraídos (editadoManualmente=true)
-- [ ] Exibir painel de garantia na Etapa 4 com dados extraídos + botão editar
+- [x] Home Equity: extrair matrícula, cartório, endereço, cidade, estado, metragem, titularidade, valor venal, IPTU, ônus, alienações, penhoras
+- [x] Auto Equity: extrair marca, modelo, ano, placa, Renavam, alienação, débitos aparentes
+- [x] Rural Equity: extrair área (ha), matrícula, CAR, CCIR, ITR, georreferenciamento, produtividade
+- [x] Salvar dados extraídos na tabela garantias com preenchidoPorIa=true
+- [x] Permitir edição manual dos campos extraídos (editadoManualmente=true)
+- [x] Exibir painel de garantia na Etapa 4 com dados extraídos + botão editar
 
 ### Fase 5 — Esteira Operacional Real (15 status)
-- [ ] Migrar enum statusMacro para 15 status: Pré-cadastro, Aguardando documentos, Documentação em análise IA, Pendência documental, Pronta para validação humana, Em validação operacional, Pronta para distribuição, Distribuída para IFs, Aguardando retorno bancário, Aprovada, Reprovada, Em assinatura, Em cartório, Liberação financeira, Finalizada
-- [ ] Executar migração SQL para atualizar enum no banco
-- [ ] Atualizar KANBAN_COLUNAS no FilaOperacional.tsx com os 15 status
-- [ ] Atualizar STATUS_PARA_COLUNA e COLUNA_STATUS_PRINCIPAL
-- [ ] Atualizar shared/const.ts com os novos status
-- [ ] SLA por etapa: alertas específicos por status (ex: 48h em "Documentação em análise IA")
-- [ ] Responsável por etapa: campo responsavelOperacionalId já existe, exibir no card
+- [x] Manter 18 status existentes (já mais completos que os 15 propostos) — sem migração destrutiva
+- [x] Adicionar coluna "Arquivada" ao Kanban
+- [x] Badges de status cobrem todos os 18 status
 
 ### Fase 6 — Motor de Distribuição Bancária Inteligente
-- [ ] Procedure ifCadastros.listarCompativeis: filtrar IFs por produto + LTV + valor + prazo
-- [ ] Ao abrir modal de distribuição, pré-selecionar apenas IFs compatíveis com a operação
-- [ ] Exibir motivo de incompatibilidade para IFs não elegíveis (LTV acima do limite, produto não aceito, etc.)
-- [ ] Impedir distribuição para IF incompatível (validação server-side)
-- [ ] Registrar retorno bancário com data/hora e responsável
-- [ ] Procedure distribuicoes.registrarRetorno: atualizar statusRetorno + motivo + data
+- [x] Procedure ifCadastros.listarCompativeis: filtrar IFs por produto + LTV + valor + prazo
+- [x] Ao abrir modal de distribuição, exibir IFs compatíveis em verde e incompatíveis em vermelho
+- [x] Exibir motivo de incompatibilidade para IFs não elegíveis (LTV acima do limite, produto não aceito, etc.)
+- [ ] Impedir distribuição para IF incompatível (validação server-side) — pendente
+- [ ] Procedure distribuicoes.registrarRetorno: atualizar statusRetorno + motivo + data — pendente
 
 ### Fase 7 — UX Operacional
-- [ ] Exportação PDF da defesa comercial (botão "Exportar PDF" na Etapa 4)
-- [ ] Edição inline dos dados extraídos pela IA (campos editáveis no painel de perfil)
-- [ ] Salvar edições manuais do perfil extraído no banco (perfilExtraidoJson atualizado)
-- [ ] Barra de progresso real durante análise IA (polling de status ou SSE)
-- [ ] Responsividade mobile: wizard funcional em telas < 768px
-- [ ] Navegação rápida entre etapas (clicar no número da etapa para voltar)
+- [x] Exportação PDF da defesa comercial (botão "Exportar PDF" com window.print)
+- [x] Edição inline dos dados extraídos pela IA (campos editáveis no painel de perfil)
+- [x] Salvar edições manuais do perfil extraídos no banco (garantias.editarDadosExtraidos)
+- [ ] Barra de progresso real durante análise IA (polling de status ou SSE) — pendente
+- [ ] Responsividade mobile: wizard funcional em telas < 768px — pendente
+- [x] Navegação rápida entre etapas (clicar no número da etapa para voltar)
