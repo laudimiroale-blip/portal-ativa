@@ -78,6 +78,13 @@
       "when": 1779668177036,
       "tag": "0010_sturdy_silverclaw",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1779670702343,
+      "tag": "0011_wild_maginty",
+      "breakpoints": true
     }
   ]
 }

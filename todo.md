@@ -444,3 +444,10 @@
 - [x] FilaOperacional: substituir SelectItems hardcoded pelo import do shared
 - [x] 8 novos testes unitários cobrindo mapa dinâmico, isGarantiaCompativel, TODAS_GARANTIAS
 - [x] 23/23 testes passando, 0 erros TypeScript
+
+## Pasted_content_23 — Cônjuge Obrigatório + Prompt IA Defesa
+
+- [x] Etapa 1: campos do cônjuge obrigatórios (nome, CPF, data de nascimento, profissão) quando estado civil = Casado ou União Estável
+- [x] Etapa 1: adicionar campos "Data de nascimento do cônjuge" e "Profissão do cônjuge" (novos campos no schema e no wizard)
+- [x] Etapa 3: adicionar automaticamente ao checklist os documentos do cônjuge (RG/CPF ou CNH; IRPF declaração + recibo) quando estado civil = Casado ou União Estável
+- [x] Etapa 4: substituir prompt da IA de defesa comercial pelo novo prompt completo (7 seções, regras, estilo, adaptação por produto)

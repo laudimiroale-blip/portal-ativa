@@ -44,11 +44,14 @@ export const parseMoney = (v?: string): string => {
 };
 
 // Inicializar checklist por produto
-async function inicializarChecklist(codigoOperacao: string, produto: string) {
+async function inicializarChecklist(codigoOperacao: string, produto: string, estadoCivil?: string) {
   const { createDocumento } = await import("../db");
   const ops = await getOperacoes({ busca: codigoOperacao });
   const op = ops.find((o) => o.codigoOperacao === codigoOperacao);
   if (!op) return;
+
+  // Documentos do cônjuge — obrigatórios quando Casado ou União Estável
+  const exigeConjuge = estadoCivil === "Casado" || estadoCivil === "União Estável";
 
   const checklistPorProduto: Record<string, { nome: string; categoria: string; opcional?: boolean }[]> = {
     "Home Equity": [
@@ -133,6 +136,24 @@ async function inicializarChecklist(codigoOperacao: string, produto: string) {
       opcional: item.opcional ?? false,
     } as any);
   }
+
+  // Adicionar documentos do cônjuge quando estado civil exige
+  if (exigeConjuge) {
+    const docsConjuge = [
+      { nome: "RG/CPF ou CNH do cônjuge", categoria: "Cônjuge" },
+      { nome: "IRPF do cônjuge — declaração + recibo de entrega", categoria: "Cônjuge" },
+    ];
+    for (const doc of docsConjuge) {
+      await createDocumento({
+        operacaoId: op.id,
+        nomeDocumento: doc.nome,
+        categoria: doc.categoria,
+        estado: "Pendente",
+        versaoAtual: 1,
+        opcional: false,
+      } as any);
+    }
+  }
 }
 
 export const operacoesRouter = router({
@@ -185,6 +206,8 @@ export const operacoesRouter = router({
       telefoneTomador: z.string().min(10),
       nomeConjuge: z.string().optional(),
       cpfConjuge: z.string().optional(),
+      nascimentoConjuge: z.string().optional(),
+      profissaoConjuge: z.string().optional(),
       emailConjuge: z.string().optional(),
       telefoneConjuge: z.string().optional(),
       produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção", "Crédito para Construção / Término de Obra"]).optional().default("Home Equity"),
@@ -213,6 +236,8 @@ export const operacoesRouter = router({
         telefoneTomador: input.telefoneTomador,
         nomeConjuge: input.nomeConjuge,
         cpfConjuge: input.cpfConjuge,
+        nascimentoConjuge: input.nascimentoConjuge,
+        profissaoConjuge: input.profissaoConjuge,
         emailConjuge: input.emailConjuge,
         telefoneConjuge: input.telefoneConjuge,
         produto: input.produto,
@@ -230,7 +255,7 @@ export const operacoesRouter = router({
         etapaAtual: input.etapaAtual ?? 1,
         responsavelOperacionalId: input.responsavelOperacionalId,
       });
-      await inicializarChecklist(codigo, input.produto);
+      await inicializarChecklist(codigo, input.produto, input.estadoCivil);
       await addLog({ evento: "operacao_criada", detalhe: { codigo }, usuarioId: user.id });
       const admins = await getAdmins();
       for (const admin of admins) {
@@ -255,6 +280,8 @@ export const operacoesRouter = router({
       telefoneTomador: z.string().optional(),
       nomeConjuge: z.string().optional(),
       cpfConjuge: z.string().optional(),
+      nascimentoConjuge: z.string().optional(),
+      profissaoConjuge: z.string().optional(),
       emailConjuge: z.string().optional(),
       telefoneConjuge: z.string().optional(),
       valorSolicitado: z.string().optional(),

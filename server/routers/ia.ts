@@ -743,20 +743,53 @@ Retorne JSON ESTRITAMENTE neste formato (use null para campos não encontrados):
         risco.fragilidades?.length ? `Fragilidades: ${risco.fragilidades.join("; ")}` : null,
       ].filter(Boolean).join(" | ");
 
-      const systemPrompt = `Você é um Analista de Crédito Sênior da Ativa Soluções, especializado em crédito com garantia real.
+      const systemPrompt = `Você é um analista de crédito sênior especializado em operações com garantia real. Sua função é gerar uma DEFESA DE CRÉDITO institucional, técnica, objetiva e persuasiva, semelhante às utilizadas por assessorias premium, bancos, fundos, FIDCs e securitizadoras.
 
-SUA MISSÃO: Gere uma Defesa Comercial técnica, persuasiva e altamente personalizada para apresentação às Instituições Financeiras.
+REGRAS OBRIGATÓRIAS:
+- Nunca inventar informações
+- Nunca criar renda inexistente
+- Nunca mencionar documentos não enviados
+- Não usar emojis, bullet points ou tópicos
+- Não usar linguagem comercial agressiva
+- Não usar linguagem informal
+- Máximo de 2.000 caracteres (preferencialmente entre 1.200 e 1.800)
 
-ESTRUTURA OBRIGATÓRIA:
-1. PERFIL DO TOMADOR: Apresente o cliente com dados concretos (profissão, renda, patrimônio, histórico)
-2. CAPACIDADE DE PAGAMENTO: Demonstre com números reais (renda, movimentação, saldo, faturamento)
-3. GARANTIA: Descreva o bem com dados da matrícula/registro, área, localização, situação jurídica
-4. LTV E PROPORCIONALIDADE: Argumente sobre o LTV e margem de segurança
-5. FINALIDADE E COERÊNCIA: Conecte a finalidade ao perfil do tomador
-6. REGULARIDADE DOCUMENTAL: Mencione a qualidade e completude da documentação
-7. PARECER POSITIVO: Conclua com recomendação clara de aprovação
+ESTILO:
+- Linguagem bancária e institucional
+- Tom de underwriting profissional
+- Parágrafos curtos e fluidos
+- Alta densidade de informação relevante
+- Semelhante a parecer bancário ou análise financeira consultiva
 
-REGRAS: Tom SEMPRE positivo, técnico e institucional | Máximo 2.200 caracteres | NÃO invente informações | Use linguagem de crédito (LTV, CCB, alienação fiduciária, etc.) | Cite números reais quando disponíveis`;
+ESTRUTURA OBRIGATÓRIA (nesta ordem):
+1. ABERTURA: valor solicitado, finalidade e objetivo econômico da operação (capital de giro, reorganização financeira, expansão, fortalecimento operacional, etc.)
+2. PERFIL DO CLIENTE: profissão, atividade econômica, renda, faturamento, capacidade financeira, estabilidade operacional. Se rural: atividade agropecuária, produtividade, exploração. Se PJ: faturamento, recorrência de receitas, estrutura empresarial.
+3. GARANTIA OFERTADA: tipo, localização, características, estrutura, padrão, liquidez, potencial patrimonial. Se rural: hectares, benfeitorias, acesso, produtividade. Se construção: estágio da obra, alvará, ART/RRT, padrão construtivo.
+4. RELAÇÃO GARANTIA X CRÉDITO: calcular LTV automaticamente (valor solicitado ÷ valor da garantia × 100). Enfatizar quando a operação for conservadora e a garantia superior ao crédito. Exemplo: "resultando em uma operação conservadora sob o ponto de vista patrimonial."
+5. REGULARIDADE DOCUMENTAL: mencionar apenas os documentos efetivamente enviados (matrícula, IPTU, CAR, CCIR, ITR, IRPF, extratos bancários, contrato social, balanços, etc.)
+6. MITIGAÇÃO DE RISCO: reforçar patrimônio sólido, renda recorrente, garantia robusta, baixo LTV, liquidez da garantia.
+7. FECHAMENTO: compatibilidade financeira, solidez da operação, suficiência da garantia, capacidade compatível com o crédito.
+
+ADAPTAÇÃO POR PRODUTO:
+- Home Equity: focar no imóvel urbano, liquidez, localização
+- Auto Equity: focar no veículo, ano, conservação, alienação
+- Rural Equity: focar na atividade agropecuária, produtividade, CAR
+- Crédito para Construção / Término de Obra: focar no estágio da obra, documentação técnica
+- PF: capacidade de pagamento pessoal
+- PJ/Empresário: faturamento e estrutura empresarial
+- Produtor Rural: exploração econômica e produtividade`;
+
+      // Buscar documentos aprovados para listar na defesa
+      const { getDocumentosByOperacao } = await import("../db");
+      const documentos = await getDocumentosByOperacao(input.operacaoId);
+      const docsAprovados = documentos
+        .filter((d: any) => d.estado === "Aprovado" || d.estado === "Enviado")
+        .map((d: any) => d.nomeDocumento)
+        .join(", ");
+
+      const conjugeInfo = (op as any).nomeConjuge
+        ? `Cônjuge: ${(op as any).nomeConjuge} | CPF: ${(op as any).cpfConjuge ?? "N/I"} | Nascimento: ${(op as any).nascimentoConjuge ?? "N/I"} | Profissão: ${(op as any).profissaoConjuge ?? "N/I"}`
+        : null;
 
       const userMessage = `DADOS DA OPERAÇÃO:
 Código: ${op.codigoOperacao} | Produto: ${op.produto}
@@ -766,6 +799,7 @@ Finalidade: ${op.finalidade}
 Tipo de Garantia: ${tipoGarantia} | Valor da Garantia: R$ ${valorGarantia}
 LTV Estimado: ${ltv}
 Estado Civil: ${op.estadoCivil ?? "Não informado"}
+${conjugeInfo ? `${conjugeInfo}` : ""}
 Contexto: ${op.contextoOperacao ?? "Não informado"}
 
 PERFIL DO TOMADOR (extraído dos documentos):
@@ -780,6 +814,9 @@ ${blocoGarantia || "Dados não extraídos"}
 LEITURA OPERACIONAL DA IA:
 ${blocoRisco || "Não disponível"}
 ${pendencias.criticas?.length ? `\nPendências críticas resolvidas: ${pendencias.criticas.join("; ")}` : ""}
+
+DOCUMENTOS EFETIVAMENTE ENVIADOS:
+${docsAprovados || "Nenhum documento aprovado até o momento"}
 ${input.comentario ? `\nComentário do consultor: ${input.comentario}` : ""}`;
 
       try {

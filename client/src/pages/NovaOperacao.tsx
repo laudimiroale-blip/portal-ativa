@@ -48,6 +48,8 @@ interface DadosCliente {
   estadoCivil: string;
   nomeConjuge?: string;
   cpfConjuge?: string;
+  nascimentoConjuge?: string;
+  profissaoConjuge?: string;
 }
 
 interface DadosOperacao {
@@ -99,6 +101,8 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
         estadoCivil: (operacaoExistente as any).estadoCivil ?? "",
         nomeConjuge: (operacaoExistente as any).nomeConjuge ?? "",
         cpfConjuge: (operacaoExistente as any).cpfConjuge ?? "",
+        nascimentoConjuge: (operacaoExistente as any).nascimentoConjuge ?? "",
+        profissaoConjuge: (operacaoExistente as any).profissaoConjuge ?? "",
       });
       setDadosOperacao({
         produto: (operacaoExistente.produto as DadosOperacao["produto"]) ?? "Home Equity",
@@ -254,6 +258,13 @@ function Etapa1DadosCliente({
     if (!dados.telefoneTomador?.trim() || dados.telefoneTomador.replace(/\D/g, "").length < 10) e.telefoneTomador = "Telefone inválido";
     if (!dados.emailTomador?.includes("@")) e.emailTomador = "E-mail inválido";
     if (!dados.estadoCivil?.trim()) e.estadoCivil = "Estado civil obrigatório";
+    // Cônjuge obrigatório quando Casado ou União Estável
+    if (exibeConjuge) {
+      if (!dados.nomeConjuge?.trim() || dados.nomeConjuge.trim().length < 2) e.nomeConjuge = "Nome do cônjuge obrigatório";
+      if (!dados.cpfConjuge || dados.cpfConjuge.replace(/\D/g, "").length < 11) e.cpfConjuge = "CPF do cônjuge obrigatório";
+      if (!dados.nascimentoConjuge?.trim()) e.nascimentoConjuge = "Data de nascimento do cônjuge obrigatória";
+      if (!dados.profissaoConjuge?.trim()) e.profissaoConjuge = "Profissão do cônjuge obrigatória";
+    }
     setErros(e);
     return Object.keys(e).length === 0;
   };
@@ -315,18 +326,22 @@ function Etapa1DadosCliente({
           {erros.estadoCivil && <p className="text-xs text-red-400">{erros.estadoCivil}</p>}
         </div>
 
-        {/* Campos do cônjuge — apenas para Casado ou União Estável */}
+        {/* Campos do cônjuge — obrigatórios para Casado ou União Estável */}
         {exibeConjuge && (
-          <div className="space-y-4 p-4 bg-muted/20 border border-border/40 rounded-lg">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Dados do Cônjuge (opcional)</p>
+          <div className="space-y-4 p-4 bg-muted/20 border border-amber-500/20 rounded-lg">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Dados do Cônjuge</p>
+              <span className="text-xs text-amber-400/70">(obrigatórios)</span>
+            </div>
             <FieldInput
-              label="Nome do Cônjuge"
+              label="Nome Completo do Cônjuge *"
               value={dados.nomeConjuge ?? ""}
               onChange={(v) => set("nomeConjuge", v)}
               placeholder="Nome completo do cônjuge"
+              error={erros.nomeConjuge}
             />
             <FieldInput
-              label="CPF do Cônjuge"
+              label="CPF do Cônjuge *"
               value={dados.cpfConjuge ?? ""}
               onChange={(v) => {
                 const digits = v.replace(/\D/g, "").slice(0, 11);
@@ -334,6 +349,25 @@ function Etapa1DadosCliente({
                 set("cpfConjuge", formatted);
               }}
               placeholder="000.000.000-00"
+              error={erros.cpfConjuge}
+            />
+            <FieldInput
+              label="Data de Nascimento do Cônjuge *"
+              value={dados.nascimentoConjuge ?? ""}
+              onChange={(v) => {
+                const digits = v.replace(/\D/g, "").slice(0, 8);
+                const formatted = digits.replace(/(\d{2})(\d{2})(\d{4})/, "$1/$2/$3");
+                set("nascimentoConjuge", formatted);
+              }}
+              placeholder="DD/MM/AAAA"
+              error={erros.nascimentoConjuge}
+            />
+            <FieldInput
+              label="Profissão do Cônjuge *"
+              value={dados.profissaoConjuge ?? ""}
+              onChange={(v) => set("profissaoConjuge", v)}
+              placeholder="Ex: Médico, Engenheiro, Empresariário"
+              error={erros.profissaoConjuge}
             />
           </div>
         )}
@@ -396,6 +430,8 @@ function Etapa2DadosOperacao({
         estadoCivil: dadosCliente.estadoCivil as "Solteiro" | "Casado" | "Divorciado" | "Viúvo" | "União Estável" | undefined,
         nomeConjuge: dadosCliente.nomeConjuge,
         cpfConjuge: dadosCliente.cpfConjuge,
+        nascimentoConjuge: dadosCliente.nascimentoConjuge,
+        profissaoConjuge: dadosCliente.profissaoConjuge,
         produto: dados.produto!,
         valorSolicitado: dados.valorSolicitado!,
         valorGarantia: dados.valorGarantia,

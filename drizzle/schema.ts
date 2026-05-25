@@ -51,6 +51,8 @@ export const operacoes = mysqlTable("operacoes", {
   telefoneTomador: varchar("telefoneTomador", { length: 20 }).notNull(),
   nomeConjuge: varchar("nomeConjuge", { length: 255 }),
   cpfConjuge: varchar("cpfConjuge", { length: 14 }),
+  nascimentoConjuge: varchar("nascimentoConjuge", { length: 10 }),
+  profissaoConjuge: varchar("profissaoConjuge", { length: 255 }),
   emailConjuge: varchar("emailConjuge", { length: 320 }),
   telefoneConjuge: varchar("telefoneConjuge", { length: 20 }),
   produto: mysqlEnum("produto", [
