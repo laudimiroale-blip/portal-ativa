@@ -5,7 +5,19 @@ import { getDb } from "../db";
 import { exportacoesDossie, documentos, documentosComplementares, operacoes, garantias, users } from "../../drizzle/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { storagePut, storageGetSignedUrl } from "../storage";
-import archiver from "archiver";
+// archiver v8 é ESM puro — importar via dynamic import para compatibilidade
+type ZipArchiveInstance = {
+  on(event: "data", cb: (chunk: Buffer) => void): void;
+  on(event: "end", cb: () => void): void;
+  on(event: "error", cb: (err: Error) => void): void;
+  append(source: NodeJS.ReadableStream | Buffer | string, data: { name: string }): void;
+  finalize(): Promise<void>;
+};
+async function createZipArchive(opts: { zlib: { level: number } }): Promise<ZipArchiveInstance> {
+  const mod = await import("archiver");
+  const ZipArchiveClass = (mod as any).ZipArchive;
+  return new ZipArchiveClass(opts) as ZipArchiveInstance;
+}
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 
@@ -228,7 +240,7 @@ export const distribuicaoRouter = router({
         .where(and(eq(garantias.operacaoId, input.operacaoId), isNull(garantias.deletedAt)));
 
       // 5. Montar ZIP em memória
-      const archive = archiver("zip", { zlib: { level: 9 } });
+      const archive = await createZipArchive({ zlib: { level: 9 } });
       const zipChunks: Buffer[] = [];
 
       await new Promise<void>((resolve, reject) => {
