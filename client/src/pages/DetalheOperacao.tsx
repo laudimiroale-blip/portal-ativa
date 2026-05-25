@@ -33,7 +33,7 @@ import { useRef, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
-type Tab = "documentos" | "dados" | "ia" | "ifs" | "historico" | "distribuicao";
+type Tab = "documentos" | "dados" | "ifs" | "historico" | "distribuicao";
 
 interface Props {
   params: { id: string };
@@ -84,7 +84,6 @@ export default function DetalheOperacao({ params }: Props) {
   const tabs = [
     { id: "documentos" as Tab, label: "Documentos", icon: FileText },
     { id: "dados" as Tab, label: "Dados", icon: Info },
-    ...(isAdmin ? [{ id: "ia" as Tab, label: "Análise IA", icon: Bot }] : []),
     { id: "ifs" as Tab, label: "Instituições", icon: Building2 },
     { id: "historico" as Tab, label: "Histórico", icon: History },
     ...(isAdmin ? [{ id: "distribuicao" as Tab, label: "Distribuição", icon: Package }] : []),
@@ -195,9 +194,7 @@ export default function DetalheOperacao({ params }: Props) {
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
-                  {tab.id === "ia" && (
-                    <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full border border-primary/30">Admin</span>
-                  )}
+
                 </button>
               );
             })}
@@ -208,7 +205,7 @@ export default function DetalheOperacao({ params }: Props) {
         <div>
           {activeTab === "documentos" && <TabDocumentos operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} />}
           {activeTab === "dados" && <TabDados operacao={operacao} isAdmin={isAdmin} onRefetch={refetch} userId={(user as any)?.id} />}
-          {activeTab === "ia" && isAdmin && <TabAnaliseIA operacaoId={operacaoId} operacao={operacao} userId={(user as any)?.id} />}
+          {/* Aba Análise IA removida — defesa disponível na aba Dados */}
           {activeTab === "ifs" && <TabIFs operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} produto={(operacao as any)?.produto} valorSolicitado={Number((operacao as any)?.valorSolicitado) || undefined} valorGarantia={Number((operacao as any)?.valorGarantia) || undefined} prazo={Number((operacao as any)?.prazo) || undefined} />}
           {activeTab === "historico" && <TabHistorico operacaoId={operacaoId} />}
           {activeTab === "distribuicao" && isAdmin && <TabDistribuicao operacaoId={operacaoId} operacao={operacao} />}
@@ -642,10 +639,81 @@ function TabDados({ operacao, isAdmin, onRefetch, userId }: { operacao: any; isA
           {field("Validação IA", operacao.statusValidacaoIa)}
         </div>
       </div>
+
+      {/* Defesa de Crédito */}
+      {(operacao.resumoInteligente || operacao.defesaComercial) && (
+        <DefesaCreditoSection
+          resumo={operacao.resumoInteligente}
+          defesa={operacao.defesaComercial}
+        />
+      )}
     </div>
   );
 }
 
+function DefesaCreditoSection({ resumo, defesa }: { resumo?: string | null; defesa?: string | null }) {
+  const [copiado, setCopiado] = useState<"resumo" | "defesa" | null>(null);
+
+  const copiar = async (texto: string, campo: "resumo" | "defesa") => {
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiado(campo);
+      setTimeout(() => setCopiado(null), 2000);
+    } catch {
+      toast.error("Não foi possível copiar.");
+    }
+  };
+
+  return (
+    <div className="card-premium rounded-lg overflow-hidden">
+      <div className="px-5 py-3 border-b border-border bg-violet-500/5 flex items-center gap-2">
+        <Shield className="w-4 h-4 text-violet-400" />
+        <h3 className="text-sm font-semibold text-foreground">Defesa de Crédito</h3>
+        <span className="text-[10px] bg-violet-500/20 text-violet-400 px-1.5 py-0.5 rounded-full border border-violet-500/30 ml-auto">Somente leitura</span>
+      </div>
+      <div className="p-5 space-y-5">
+        {resumo && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Resumo Inteligente</p>
+              <button
+                onClick={() => copiar(resumo, "resumo")}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-muted-foreground hover:text-foreground border border-border hover:border-primary/40 transition-colors"
+              >
+                {copiado === "resumo" ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Download className="w-3 h-3" />}
+                {copiado === "resumo" ? "Copiado!" : "Copiar"}
+              </button>
+            </div>
+            <div className="bg-muted/20 rounded-lg p-4 border border-border/50">
+              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{resumo}</p>
+            </div>
+          </div>
+        )}
+        {defesa && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Defesa Comercial</p>
+              <button
+                onClick={() => copiar(defesa, "defesa")}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs text-muted-foreground hover:text-foreground border border-border hover:border-primary/40 transition-colors"
+              >
+                {copiado === "defesa" ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Download className="w-3 h-3" />}
+                {copiado === "defesa" ? "Copiado!" : "Copiar defesa"}
+              </button>
+            </div>
+            <div className="bg-violet-500/5 rounded-lg p-4 border border-violet-500/20">
+              <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{defesa}</p>
+            </div>
+          </div>
+        )}
+        {!resumo && !defesa && (
+          <p className="text-sm text-muted-foreground text-center py-4">Nenhuma defesa de crédito gerada para esta operação.</p>
+        )}
+      </div>
+    </div>
+  );
+
+}
 // ─── Tab Análise IA ───────────────────────────────────────────────────────────
 
 function TabAnaliseIA({ operacaoId, operacao, userId }: { operacaoId: number; operacao: any; userId: number }) {
@@ -824,6 +892,32 @@ function TabAnaliseIA({ operacaoId, operacao, userId }: { operacaoId: number; op
 
 function TabIFs({ operacaoId, isAdmin, userId, produto, valorSolicitado, valorGarantia, prazo }: { operacaoId: number; isAdmin: boolean; userId: number; produto?: string; valorSolicitado?: number; valorGarantia?: number; prazo?: number }) {
   const { data: ifs, isLoading, refetch } = trpc.ifs.listar.useQuery({ operacaoId });
+  const utils = trpc.useUtils();
+  const [pendenciarModal, setPendenciarModal] = useState(false);
+  const [descricaoPendencia, setDescricaoPendencia] = useState("");
+  const [pendenciando, setPendenciando] = useState(false);
+  const atualizarOperacaoMutation = trpc.operacoes.atualizar.useMutation({
+    onSuccess: () => utils.operacoes.obter.invalidate({ id: operacaoId }),
+    onError: (e) => toast.error("Erro ao atualizar status: " + e.message),
+  });
+  const distribuirOperacao = () => {
+    atualizarOperacaoMutation.mutate({
+      id: operacaoId,
+      statusMacro: "Em distribuição",
+      motivo: "Operação distribuída para instituições financeiras.",
+    });
+    toast.success("Status atualizado para \"Em distribuição\"!");
+  };
+  const pendenciarOperacao = async () => {
+    if (!descricaoPendencia.trim()) { toast.error("Descreva a pendência antes de confirmar."); return; }
+    setPendenciando(true);
+    try {
+      await atualizarOperacaoMutation.mutateAsync({ id: operacaoId, statusMacro: "Aguardando cliente", motivo: descricaoPendencia.trim() });
+      toast.success("Operação pendenciada! Status: Aguardando cliente.");
+      setPendenciarModal(false);
+      setDescricaoPendencia("");
+    } catch { /* tratado no onError */ } finally { setPendenciando(false); }
+  };
   // Calcular LTV estimado
   const ltv = valorSolicitado && valorGarantia && valorGarantia > 0
     ? Math.round((valorSolicitado / valorGarantia) * 100 * 10) / 10
@@ -892,7 +986,25 @@ function TabIFs({ operacaoId, isAdmin, userId, produto, valorSolicitado, valorGa
   return (
     <div className="space-y-4">
       {isAdmin && (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={distribuirOperacao}
+              disabled={atualizarOperacaoMutation.isPending}
+              className="flex items-center gap-2 px-3 py-2 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-lg text-sm hover:bg-teal-500/20 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Distribuir
+            </button>
+            <button
+              onClick={() => setPendenciarModal(true)}
+              disabled={atualizarOperacaoMutation.isPending}
+              className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-sm hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Pendenciar
+            </button>
+          </div>
           <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm hover:bg-primary/20 transition-colors"
@@ -900,6 +1012,42 @@ function TabIFs({ operacaoId, isAdmin, userId, produto, valorSolicitado, valorGa
             <Plus className="w-4 h-4" />
             Enviar para IF
           </button>
+        </div>
+      )}
+
+      {/* Modal de Pendenciar */}
+      {pendenciarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-semibold text-foreground">Pendenciar Operação</h3>
+                <p className="text-sm text-muted-foreground mt-1">Descreva o motivo da pendência. O status será atualizado e registrado no histórico.</p>
+              </div>
+            </div>
+            <textarea
+              className="w-full px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:border-amber-500/50 min-h-[100px] resize-none"
+              placeholder="Ex: Documentos da garantia incompletos, aguardando laudo de avaliação..."
+              value={descricaoPendencia}
+              onChange={(e) => setDescricaoPendencia(e.target.value)}
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setPendenciarModal(false); setDescricaoPendencia(""); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-muted hover:bg-muted/80 text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={pendenciarOperacao}
+                disabled={pendenciando || !descricaoPendencia.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-black transition-colors disabled:opacity-50"
+              >
+                {pendenciando ? "Pendenciando..." : "Confirmar Pendência"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1273,11 +1421,11 @@ function TabDistribuicao({ operacaoId, operacao }: { operacaoId: number; operaca
   const previewMutation = trpc.distribuicao.gerarPdfPreview.useMutation({
     onSuccess: (data) => {
       setPreviewUrl(data.pdfUrl);
-      setPreviewOpen(true);
       setGerandoPreview(false);
     },
     onError: (err) => {
       setGerandoPreview(false);
+      setPreviewOpen(false);
       toast.error("Erro ao gerar preview: " + err.message);
     },
   });
@@ -1355,7 +1503,7 @@ function TabDistribuicao({ operacaoId, operacao }: { operacaoId: number; operaca
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setGerandoPreview(true); previewMutation.mutate({ operacaoId }); }}
+            onClick={() => { setPreviewOpen(true); setPreviewUrl(null); setGerandoPreview(true); previewMutation.mutate({ operacaoId }); }}
             disabled={exportando || gerandoPreview}
             className={cn(
               "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
@@ -1519,6 +1667,71 @@ function TabDistribuicao({ operacaoId, operacao }: { operacaoId: number; operaca
           </div>
         )}
       </div>
+
+      {/* Modal de Preview do PDF */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col" style={{ height: '90vh' }}>
+            {/* Header do modal */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-amber-400" />
+                <h3 className="font-semibold text-foreground text-sm">Preview do Dossiê</h3>
+                <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full border border-amber-500/30">PDF</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {previewUrl && (
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs font-medium text-foreground transition-colors"
+                  >
+                    <Download className="w-3 h-3" />
+                    Abrir em nova aba
+                  </a>
+                )}
+                <button
+                  onClick={() => { setPreviewOpen(false); setPreviewUrl(null); }}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Corpo do modal */}
+            <div className="flex-1 overflow-hidden relative">
+              {!previewUrl ? (
+                /* Loading state com skeleton */
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-muted/10">
+                  <div className="relative w-16 h-16">
+                    <div className="absolute inset-0 rounded-full border-4 border-amber-500/20" />
+                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-amber-500 animate-spin" />
+                    <FileText className="absolute inset-0 m-auto w-7 h-7 text-amber-400" />
+                  </div>
+                  <div className="text-center space-y-2">
+                    <p className="text-sm font-medium text-foreground">Gerando preview do PDF...</p>
+                    <p className="text-xs text-muted-foreground">Isso pode levar alguns segundos</p>
+                  </div>
+                  {/* Skeleton de linhas */}
+                  <div className="w-64 space-y-2 mt-2">
+                    {[80, 60, 90, 50, 75].map((w, i) => (
+                      <div key={i} className="h-2.5 bg-muted/40 rounded-full animate-pulse" style={{ width: `${w}%` }} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-full border-0"
+                  title="Preview do Dossiê"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de pendências */}
       {pendenciasModal && (

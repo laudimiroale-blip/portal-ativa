@@ -10,6 +10,9 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   AlertTriangle,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
   FileText,
   Filter,
   GripVertical,
@@ -17,6 +20,7 @@ import {
   Search,
   User,
   X,
+  ZoomIn,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -143,6 +147,109 @@ const COLUNA_STATUS_PRINCIPAL: Record<string, string> = {
   liberacao: "Aprovada",
 };
 
+// ─── Lightbox de Fotos ───────────────────────────────────────────────────────
+
+interface LightboxProps {
+  fotos: { id: number; nomeDocumento: string; arquivoUrl: string }[];
+  indiceInicial: number;
+  onClose: () => void;
+}
+
+function LightboxFotos({ fotos, indiceInicial, onClose }: LightboxProps) {
+  const [indice, setIndice] = useState(indiceInicial);
+  const total = fotos.length;
+  const foto = fotos[indice];
+
+  const anterior = () => setIndice((i) => (i - 1 + total) % total);
+  const proximo = () => setIndice((i) => (i + 1) % total);
+
+  // Fechar com ESC
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") anterior();
+      if (e.key === "ArrowRight") proximo();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [total]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      {/* Container central — impede fechar ao clicar na foto */}
+      <div
+        className="relative flex flex-col items-center max-w-4xl w-full mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Barra superior */}
+        <div className="flex items-center justify-between w-full mb-3 px-1">
+          <span className="text-sm text-white/70 font-medium">
+            {foto?.nomeDocumento || "Foto"}
+          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/50">{indice + 1} de {total} fotos</span>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Imagem */}
+        <div className="relative w-full flex items-center justify-center">
+          {total > 1 && (
+            <button
+              onClick={anterior}
+              className="absolute left-0 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white transition-all hover:scale-110 -translate-x-2"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          )}
+
+          <img
+            src={foto?.arquivoUrl}
+            alt={foto?.nomeDocumento}
+            className="max-h-[70vh] max-w-full rounded-lg object-contain shadow-2xl"
+            style={{ touchAction: "pan-y" }}
+          />
+
+          {total > 1 && (
+            <button
+              onClick={proximo}
+              className="absolute right-0 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 hover:bg-black/70 text-white transition-all hover:scale-110 translate-x-2"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Miniaturas */}
+        {total > 1 && (
+          <div className="flex gap-2 mt-4 overflow-x-auto max-w-full pb-1" style={{ scrollbarWidth: 'thin' }}>
+            {fotos.map((f, i) => (
+              <button
+                key={f.id}
+                onClick={() => setIndice(i)}
+                className={cn(
+                  "w-14 h-14 rounded-md overflow-hidden flex-shrink-0 border-2 transition-all",
+                  i === indice ? "border-amber-400 scale-105" : "border-transparent opacity-60 hover:opacity-90"
+                )}
+              >
+                <img src={f.arquivoUrl} alt={f.nomeDocumento} className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente Card do Kanban ────────────────────────────────────────────────
 
 interface KanbanCardProps {
@@ -154,6 +261,13 @@ interface KanbanCardProps {
 }
 
 function KanbanCard({ op, isSlaAlert, isDragging, onDragStart, onDragEnd }: KanbanCardProps) {
+  const [lightboxAberto, setLightboxAberto] = useState(false);
+  const [lightboxIndice, setLightboxIndice] = useState(0);
+  const { data: fotos, isLoading: carregandoFotos } = trpc.documentos.listarFotos.useQuery(
+    { operacaoId: op.id },
+    { enabled: lightboxAberto }
+  );
+  const fotosValidas = (fotos ?? []).filter((f: any) => f.arquivoUrl) as { id: number; nomeDocumento: string; arquivoUrl: string }[];
   const valorFormatado = op.valorSolicitado
     ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(
         Number(op.valorSolicitado)
@@ -281,6 +395,54 @@ function KanbanCard({ op, isSlaAlert, isDragging, onDragStart, onDragEnd }: Kanb
 
       {/* SLA Alert */}
       {isSlaAlert && <SlaAlertBadge label="SLA" className="mt-1.5" />}
+
+      {/* Botão de fotos */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setLightboxIndice(0);
+          setLightboxAberto(true);
+        }}
+        className="mt-1.5 w-full flex items-center justify-center gap-1.5 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 text-[10px] font-medium transition-all"
+        title="Ver fotos do imóvel/veículo"
+      >
+        <Camera className="w-3 h-3" />
+        Fotos
+        <ZoomIn className="w-3 h-3 opacity-60" />
+      </button>
+
+      {/* Lightbox */}
+      {lightboxAberto && (
+        fotosValidas.length > 0 ? (
+          <LightboxFotos
+            fotos={fotosValidas}
+            indiceInicial={lightboxIndice}
+            onClose={() => setLightboxAberto(false)}
+          />
+        ) : (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+            onClick={() => setLightboxAberto(false)}
+          >
+            <div className="bg-card border border-border rounded-xl p-8 text-center space-y-3 max-w-xs" onClick={(e) => e.stopPropagation()}>
+              <Camera className="w-10 h-10 mx-auto text-muted-foreground/40" />
+              <p className="text-sm text-foreground font-medium">
+                {carregandoFotos ? "Carregando fotos..." : "Nenhuma foto encontrada"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {carregandoFotos ? "" : "Envie fotos do imóvel ou veículo na aba Documentos."}
+              </p>
+              <button
+                onClick={() => setLightboxAberto(false)}
+                className="px-4 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs font-medium text-foreground transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }

@@ -98,6 +98,26 @@ export const documentosRouter = router({
       return { success: true };
     }),
 
+  listarFotos: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .query(async ({ input }) => {
+      const docs = await getDocumentosByOperacao(input.operacaoId);
+      // Filtrar documentos que são fotos: nome contém "foto" OU categoria é de garantia/veículo/obra
+      return docs.filter((d) => {
+        const nome = (d.nomeDocumento ?? "").toLowerCase();
+        const cat = (d.categoria ?? "").toLowerCase();
+        const isImagem = d.arquivoUrl
+          ? /\.(jpg|jpeg|png|heic|webp)(\?.*)?$/i.test(d.arquivoUrl)
+          : false;
+        const isFotoNome = nome.includes("foto");
+        const isFotoCat = [
+          "imóvel", "imovel", "veículo", "veiculo",
+          "obra", "imóvel rural", "imovel rural",
+        ].some((c) => cat.includes(c));
+        return d.arquivoUrl && (isImagem || isFotoNome || isFotoCat);
+      });
+    }),
+
   complementares: router({
     listar: protectedProcedure
       .input(z.object({ operacaoId: z.number() }))

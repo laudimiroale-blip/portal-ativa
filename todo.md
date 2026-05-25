@@ -485,3 +485,12 @@
 - [x] Melhoria 1: Modal de preview do PDF do dossiê antes do download do ZIP (procedure `distribuicao.gerarPdfPreview` retorna URL do PDF; modal com iframe/embed)
 - [x] Melhoria 2: Filtros no painel de operações por status de documento (tem pendente/aprovado/reprovado) e por categoria de garantia (Residencial/Comercial/Rural/Veicular)
 - [x] Melhoria 3: Resumo Inteligente pré-preenchido automaticamente com dados das etapas 1-3 antes da edição manual (sem chamar IA — apenas template estruturado)
+
+## Melhorias — Sessão 4 (25/05/2026)
+
+- [x] Melhoria A: Loading state (spinner/skeleton) no modal de preview do PDF
+- [x] Melhoria B: Lightbox de fotos na Fila Operacional (setas, contador, ESC, swipe)
+- [x] Melhoria C: Seção "Defesa de Crédito" na aba Dados do DetalheOperacao (leitura + copiar)
+- [x] Melhoria D: Remover aba "Análise IA (Admin)" do DetalheOperacao
+- [x] Melhoria E: Aba Instituições — botões Distribuir/Pendenciar com mudança de status + histórico
+- [x] Melhoria F: Aba Distribuição — Preview PDF com loading state + modal com skeleton + iframe quando pronto
