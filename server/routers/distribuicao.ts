@@ -170,6 +170,12 @@ async function gerarPdfResumo(op: any, garantia: any, pendencias: string[]): Pro
       }
     }
 
+    // Resumo Inteligente
+    if (op.resumoInteligente) {
+      section("Resumo Inteligente da Operação");
+      doc.fillColor(DARK).fontSize(9).font("Helvetica").text(op.resumoInteligente, { lineGap: 3 });
+    }
+
     // Pendências
     if (pendencias.length > 0) {
       section("Pendências Documentais");

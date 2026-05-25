@@ -469,7 +469,7 @@ function TabDocumentos({ operacaoId, isAdmin, userId }: { operacaoId: number; is
                         onChange={(e) => atualizarEstadoMutation.mutate({ documentoId: doc.id, estado: e.target.value as any })}
                         className="text-xs bg-input border border-border rounded px-2 py-1 text-foreground focus:outline-none focus:border-primary/50"
                       >
-                        {["Pendente","Enviado","Em Análise","Aprovado","Reprovado","Ilegível","Vencido","Reenviar"].map((e) => (
+                        {["Pendente","Enviado","Em Análise","Validado","Aprovado","Reprovado","Pendência encontrada","Ilegível","Vencido","Reenviar"].map((e) => (
                           <option key={e} value={e}>{e}</option>
                         ))}
                       </select>
@@ -1215,6 +1215,8 @@ function DocEstadoDot({ estado }: { estado: string }) {
     "Ilegível": "bg-orange-400",
     "Vencido": "bg-yellow-400",
     "Reenviar": "bg-amber-400",
+    "Validado": "bg-teal-400",
+    "Pendência encontrada": "bg-rose-400",
   };
   return <span className={cn("w-2 h-2 rounded-full flex-shrink-0", colors[estado] ?? "bg-zinc-500")} />;
 }
@@ -1229,6 +1231,8 @@ function DocEstadoBadge({ estado }: { estado: string }) {
     "Ilegível": "bg-orange-500/20 text-orange-400 border-orange-500/30",
     "Vencido": "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
     "Reenviar": "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    "Validado": "bg-teal-500/20 text-teal-400 border-teal-500/30",
+    "Pendência encontrada": "bg-rose-500/20 text-rose-400 border-rose-500/30",
   };
   return (
     <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap", classes[estado] ?? "bg-zinc-700/50 text-zinc-400 border-zinc-600/30")}>
@@ -1358,33 +1362,64 @@ function TabDistribuicao({ operacaoId, operacao }: { operacaoId: number; operaca
         </div>
       )}
 
-      {/* Barra de progresso */}
+      {/* Barra de progresso — overlay de tela cheia */}
       {exportando && (
-        <div className="p-4 rounded-lg bg-card border border-border space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">{etapa || "Iniciando..."}</span>
-            <span className="text-primary font-medium">{progresso}%</span>
-          </div>
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-amber-500 rounded-full transition-all duration-700 ease-out"
-              style={{ width: `${progresso}%` }}
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {ETAPAS.map((e, i) => (
-              <span
-                key={e}
-                className={cn(
-                  "text-[10px] px-2 py-0.5 rounded-full border",
-                  progresso >= Math.round(((i + 1) / (ETAPAS.length + 1)) * 90)
-                    ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                    : "bg-muted text-muted-foreground border-border",
-                )}
-              >
-                {e.replace("...", "")}
-              </span>
-            ))}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-5">
+            {/* Ícone animado */}
+            <div className="flex justify-center">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-amber-500/20" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-amber-500 animate-spin" />
+                <Package className="absolute inset-0 m-auto w-7 h-7 text-amber-400" />
+              </div>
+            </div>
+
+            {/* Título e etapa atual */}
+            <div className="text-center space-y-1">
+              <p className="text-base font-semibold text-foreground">Gerando Dossiê...</p>
+              <p className="text-sm text-amber-400 font-medium min-h-[20px] transition-all duration-300">
+                {etapa || "Iniciando..."}
+              </p>
+            </div>
+
+            {/* Barra de progresso */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Progresso</span>
+                <span className="text-amber-400 font-semibold">{progresso}%</span>
+              </div>
+              <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${progresso}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Etapas como stepper */}
+            <div className="space-y-2">
+              {ETAPAS.map((e, i) => {
+                const limiar = Math.round(((i + 1) / (ETAPAS.length + 1)) * 90);
+                const concluida = progresso > limiar;
+                const atual = etapa === e;
+                return (
+                  <div key={e} className={cn("flex items-center gap-3 text-sm transition-all duration-300", concluida ? "opacity-100" : atual ? "opacity-100" : "opacity-40")}>
+                    <div className={cn(
+                      "w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border transition-all",
+                      concluida ? "bg-amber-500 border-amber-500 text-black" : atual ? "border-amber-500 text-amber-400 animate-pulse" : "border-border text-muted-foreground"
+                    )}>
+                      {concluida ? "✓" : i + 1}
+                    </div>
+                    <span className={cn(concluida ? "text-foreground line-through decoration-amber-500/50" : atual ? "text-amber-300 font-medium" : "text-muted-foreground")}>
+                      {e}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-center text-xs text-muted-foreground">Por favor, aguarde. Isso pode levar alguns segundos.</p>
           </div>
         </div>
       )}

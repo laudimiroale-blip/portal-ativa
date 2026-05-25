@@ -65,6 +65,49 @@ export const operacoes = mysqlTable("operacoes", {
   valorSolicitado: decimal("valorSolicitado", { precision: 15, scale: 2 }).notNull(),
   prazo: int("prazo").notNull(),
   finalidade: text("finalidade").notNull(),
+  // Item 1 — Finalidade separada em select + textarea
+  finalidadePrincipal: mysqlEnum("finalidadePrincipal", [
+    "Capital de giro",
+    "Quitação de dívidas",
+    "Expansão empresarial",
+    "Investimento operacional",
+    "Reforma",
+    "Construção",
+    "Término de obra",
+    "Compra de equipamentos",
+    "Reorganização financeira",
+    "Liquidez",
+    "Investimento rural",
+    "Outros",
+  ]),
+  // Item 2 — Hierarquia de garantia
+  categoriaGarantia: mysqlEnum("categoriaGarantia", [
+    "Residencial",
+    "Comercial",
+    "Rural",
+    "Veicular",
+    "Construção",
+  ]),
+  // Item 3 — Garantia quitada
+  garantiaQuitada: mysqlEnum("garantiaQuitada", [
+    "Sim — totalmente quitada",
+    "Não — possui financiamento ativo",
+    "Parcialmente financiada",
+  ]),
+  dividaAtual: decimal("dividaAtual", { precision: 15, scale: 2 }),
+  // Item 4 — Origem da renda
+  origemRenda: mysqlEnum("origemRenda", [
+    "Assalariado (CLT)",
+    "Empresário / Sócio",
+    "Profissional liberal",
+    "Produtor rural",
+    "Aposentado / Pensionista",
+    "Comissionado",
+    "Misto",
+    "Outros",
+  ]),
+  // Item 5 — Resumo inteligente
+  resumoInteligente: text("resumoInteligente"),
   // Campo único de contexto (substitui observacoesEstrategicas)
   contextoOperacao: text("contextoOperacao"),
   // Mantido para compatibilidade retroativa
@@ -184,6 +227,10 @@ export const documentos = mysqlTable("documentos", {
     "Aprovado",
     "Reprovado",
     "Reenviar",
+    // Item 6 — novos status avançados
+    "Aguardando análise",
+    "Incompatível",
+    "Não aplicável",
   ])
     .default("Pendente")
     .notNull(),

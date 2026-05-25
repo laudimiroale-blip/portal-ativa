@@ -470,3 +470,12 @@
 - [x] Estrutura de pastas no ZIP: 01_Defesa, 02_Resumo, 03_SCR, 04_Cliente, 05_Conjuge, 06_Garantia, 07_PJ
 - [x] PDF 02_Resumo_da_Operacao.pdf com layout profissional (dados operação, cliente, cônjuge, garantia, pendências)
 - [x] Rodapé "Documento gerado pelo Portal Ativa Soluções — uso interno e confidencial"
+
+## Pasted_content_25 — Ajustes Wizard e Documentos
+
+- [x] Item 1: Separar campo "finalidade" em dois: select "Finalidade Principal" + textarea "Contexto da operação"
+- [x] Item 2: Hierarquia de 3 níveis para Tipo de Garantia: Produto → Categoria (Residencial/Comercial/Rural/Veicular/Construção) → Tipo; salvar categoriaGarantia no banco
+- [x] Item 3: Campo "A garantia está quitada?" (Sim/Não/Parcialmente) obrigatório; se Não ou Parcialmente, exibir "Valor da dívida atual (R$)"
+- [x] Item 4: Campo "Origem da renda" (select obrigatório) na Etapa 1; controla checklist de documentos dinamicamente
+- [x] Item 5: Botão "Gerar Resumo Inteligente" na Etapa 4; IA gera parágrafo de 3 linhas editável; incluso no dossiê ZIP
+- [x] Item 6: Status avançado por documento (10 status: Pendente, Enviado, Em Análise, Validado, Aprovado, Reprovado, Pendência encontrada, Ilegível, Vencido, Reenviar); badge colorido; alteração manual pelo admin; IA classifica automaticamente

@@ -50,14 +50,23 @@ interface DadosCliente {
   cpfConjuge?: string;
   nascimentoConjuge?: string;
   profissaoConjuge?: string;
+  // Item 4 — Origem da renda
+  origemRenda: string;
 }
 
 interface DadosOperacao {
   produto: Produto;
   valorSolicitado: string;
   valorGarantia: string;
+  // Item 2 — Hierarquia de garantia
+  categoriaGarantia: string;
   tipoGarantiaDescricao: string;
+  // Item 3 — Garantia quitada
+  garantiaQuitada: string;
+  dividaAtual: string;
   prazo: number;
+  // Item 1 — Finalidade separada
+  finalidadePrincipal: string;
   finalidade: string;
   contextoOperacao: string;
   responsavelOperacionalId?: number;
@@ -103,13 +112,18 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
         cpfConjuge: (operacaoExistente as any).cpfConjuge ?? "",
         nascimentoConjuge: (operacaoExistente as any).nascimentoConjuge ?? "",
         profissaoConjuge: (operacaoExistente as any).profissaoConjuge ?? "",
+        origemRenda: (operacaoExistente as any).origemRenda ?? "",
       });
       setDadosOperacao({
         produto: (operacaoExistente.produto as DadosOperacao["produto"]) ?? "Home Equity",
         valorSolicitado: String(operacaoExistente.valorSolicitado ?? ""),
         valorGarantia: String(operacaoExistente.valorGarantia ?? ""),
+        categoriaGarantia: (operacaoExistente as any).categoriaGarantia ?? "",
         tipoGarantiaDescricao: operacaoExistente.tipoGarantiaDescricao ?? "",
+        garantiaQuitada: (operacaoExistente as any).garantiaQuitada ?? "",
+        dividaAtual: String((operacaoExistente as any).dividaAtual ?? ""),
         prazo: operacaoExistente.prazo ?? 60,
+        finalidadePrincipal: (operacaoExistente as any).finalidadePrincipal ?? "",
         finalidade: operacaoExistente.finalidade ?? "",
         contextoOperacao: operacaoExistente.contextoOperacao ?? "",
         responsavelOperacionalId: operacaoExistente.responsavelOperacionalId ?? undefined,
@@ -326,6 +340,22 @@ function Etapa1DadosCliente({
           {erros.estadoCivil && <p className="text-xs text-red-400">{erros.estadoCivil}</p>}
         </div>
 
+        {/* Item 4 — Origem da Renda */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">Origem da Renda *</label>
+          <Select value={dados.origemRenda ?? ""} onValueChange={(v) => set("origemRenda", v)}>
+            <SelectTrigger className={erros.origemRenda ? "border-red-500" : ""}>
+              <SelectValue placeholder="Selecione a origem da renda" />
+            </SelectTrigger>
+            <SelectContent>
+              {["Assalariado (CLT)","Empresário / Sócio","Profissional liberal","Produtor rural","Aposentado / Pensionista","Comissionado","Misto","Outros"].map((v) => (
+                <SelectItem key={v} value={v}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {erros.origemRenda && <p className="text-xs text-red-400">{erros.origemRenda}</p>}
+        </div>
+
         {/* Campos do cônjuge — obrigatórios para Casado ou União Estável */}
         {exibeConjuge && (
           <div className="space-y-4 p-4 bg-muted/20 border border-amber-500/20 rounded-lg">
@@ -435,9 +465,14 @@ function Etapa2DadosOperacao({
         produto: dados.produto!,
         valorSolicitado: dados.valorSolicitado!,
         valorGarantia: dados.valorGarantia,
+        categoriaGarantia: dados.categoriaGarantia as any,
         tipoGarantiaDescricao: dados.tipoGarantiaDescricao,
+        garantiaQuitada: dados.garantiaQuitada as any,
+        dividaAtual: dados.dividaAtual,
         prazo: dados.prazo!,
+        finalidadePrincipal: dados.finalidadePrincipal as any,
         finalidade: dados.finalidade!,
+        origemRenda: dadosCliente.origemRenda as any,
         contextoOperacao: dados.contextoOperacao,
         statusRascunho: rascunho,
         etapaAtual: rascunho ? 2 : 3,
@@ -536,6 +571,21 @@ function Etapa2DadosOperacao({
           error={erros.valorGarantia}
         />
 
+        {/* Item 2 — Categoria da Garantia */}
+        <div className="space-y-1.5">
+          <Label className="text-sm text-muted-foreground">Categoria da Garantia</Label>
+          <Select value={dados.categoriaGarantia ?? ""} onValueChange={(v) => set("categoriaGarantia", v)}>
+            <SelectTrigger className="bg-background/50">
+              <SelectValue placeholder="Selecione a categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              {["Residencial","Comercial","Rural","Veicular","Construção"].map((v) => (
+                <SelectItem key={v} value={v}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Tipo de Garantia — dinâmico conforme produto selecionado */}
         <div className="space-y-1.5">
           <Label className="text-sm text-muted-foreground">Tipo de Garantia *</Label>
@@ -578,12 +628,52 @@ function Etapa2DadosOperacao({
           {erros.prazo && <p className="text-xs text-red-400">{erros.prazo}</p>}
         </div>
 
+        {/* Item 3 — Garantia Quitada */}
         <div className="space-y-1.5">
-          <Label className="text-sm text-muted-foreground">Finalidade *</Label>
+          <Label className="text-sm text-muted-foreground">Situação do Financiamento da Garantia</Label>
+          <Select value={dados.garantiaQuitada ?? ""} onValueChange={(v) => set("garantiaQuitada", v)}>
+            <SelectTrigger className="bg-background/50">
+              <SelectValue placeholder="A garantia está quitada?" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Sim — totalmente quitada">Sim — totalmente quitada</SelectItem>
+              <SelectItem value="Não — possui financiamento ativo">Não — possui financiamento ativo</SelectItem>
+              <SelectItem value="Parcialmente financiada">Parcialmente financiada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Dívida atual — visível quando há financiamento */}
+        {(dados.garantiaQuitada === "Não — possui financiamento ativo" || dados.garantiaQuitada === "Parcialmente financiada") && (
+          <FieldInput
+            label="Dívida Atual do Financiamento (R$)"
+            value={dados.dividaAtual ?? ""}
+            onChange={(v) => set("dividaAtual", formatMoney(v))}
+            placeholder="Ex: 120.000,00"
+          />
+        )}
+
+        {/* Item 1 — Finalidade Principal (select) */}
+        <div className="space-y-1.5">
+          <Label className="text-sm text-muted-foreground">Finalidade Principal *</Label>
+          <Select value={dados.finalidadePrincipal ?? ""} onValueChange={(v) => set("finalidadePrincipal", v)}>
+            <SelectTrigger className={cn("bg-background/50", erros.finalidade && "border-red-500")}>
+              <SelectValue placeholder="Selecione a finalidade" />
+            </SelectTrigger>
+            <SelectContent>
+              {["Capital de giro","Quitação de dívidas","Expansão empresarial","Investimento operacional","Reforma","Construção","Término de obra","Compra de equipamentos","Reorganização financeira","Liquidez","Investimento rural","Outros"].map((v) => (
+                <SelectItem key={v} value={v}>{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-sm text-muted-foreground">Detalhamento da Finalidade *</Label>
           <Input
             value={dados.finalidade ?? ""}
             onChange={(e) => set("finalidade", e.target.value)}
-            placeholder="Ex: Capital de giro, reforma, quitação de dívidas..."
+            placeholder="Ex: Capital de giro para expansão da frota, reforma do imóvel..."
             className={cn("bg-background/50", erros.finalidade && "border-red-500")}
           />
           {erros.finalidade && <p className="text-xs text-red-400">{erros.finalidade}</p>}
@@ -1923,6 +2013,41 @@ function Etapa4ResumoDefesa({
   const [showComentario, setShowComentario] = useState(false);
   const [extraindo, setExtraindo] = useState(false);
   const [defesaAprovada, setDefesaAprovada] = useState(false);
+  // Resumo Inteligente
+  const [resumoLocal, setResumoLocal] = useState<string | null>(null);
+  const [editandoResumo, setEditandoResumo] = useState(false);
+  const [resumoEditado, setResumoEditado] = useState("");
+  const [gerandoResumo, setGerandoResumo] = useState(false);
+  const gerarResumoMutation = trpc.ia.gerarResumoInteligente.useMutation();
+  const resumoExistente = (op as any)?.resumoInteligente as string | null;
+  const resumoAtual = resumoLocal ?? resumoExistente ?? "";
+
+  const handleGerarResumo = async () => {
+    if (!operacaoId) return;
+    setGerandoResumo(true);
+    try {
+      const resultado = await gerarResumoMutation.mutateAsync({ operacaoId });
+      setResumoLocal(resultado.resumo);
+      await utils.operacoes.listar.invalidate();
+      toast.success("Resumo inteligente gerado!");
+    } catch (err: any) {
+      toast.error("Erro ao gerar resumo: " + err.message);
+    } finally {
+      setGerandoResumo(false);
+    }
+  };
+
+  const handleSalvarResumo = async () => {
+    if (!operacaoId) return;
+    try {
+      await atualizarMutation.mutateAsync({ id: operacaoId, resumoInteligente: resumoEditado });
+      setResumoLocal(resumoEditado);
+      setEditandoResumo(false);
+      toast.success("Resumo salvo!");
+    } catch (err: any) {
+      toast.error("Erro ao salvar resumo: " + err.message);
+    }
+  };
 
   const handleSalvarEdicaoPerfil = async () => {
     if (!operacaoId) return;
@@ -2070,6 +2195,50 @@ function Etapa4ResumoDefesa({
               <p className="text-sm text-foreground font-medium">{value ?? "—"}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Resumo Inteligente */}
+      <div className="border border-border/40 rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b border-border/30">
+          <div className="flex items-center gap-2">
+            <FileText className="w-3.5 h-3.5 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">Resumo Inteligente da Operação</h3>
+            {resumoAtual && <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">Disponível</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            {resumoAtual && (
+              <Button size="sm" variant="ghost" onClick={() => { setEditandoResumo(!editandoResumo); setResumoEditado(resumoAtual); }} className="h-7 px-2 gap-1 text-xs text-muted-foreground">
+                <Edit3 className="w-3 h-3" />{editandoResumo ? "Cancelar" : "Editar"}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={handleGerarResumo} disabled={gerandoResumo || !operacaoId} className="gap-1.5 text-xs">
+              {gerandoResumo ? <Loader2 className="w-3 h-3 animate-spin" /> : resumoAtual ? <RefreshCw className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
+              {resumoAtual ? "Regenerar" : "Gerar com IA"}
+            </Button>
+          </div>
+        </div>
+        <div className="p-4">
+          {resumoAtual ? (
+            editandoResumo ? (
+              <div className="space-y-3">
+                <Textarea value={resumoEditado} onChange={(e) => setResumoEditado(e.target.value)} className="bg-background/50 min-h-[140px] resize-none text-sm" />
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setEditandoResumo(false)} className="text-xs">Cancelar</Button>
+                  <Button size="sm" onClick={handleSalvarResumo} disabled={atualizarMutation.isPending} className="btn-primary gap-1.5 text-xs">
+                    {atualizarMutation.isPending && <Loader2 className="w-3 h-3 animate-spin" />}Salvar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{resumoAtual}</p>
+            )
+          ) : (
+            <div className="text-center py-5 space-y-2">
+              <FileText className="w-8 h-8 mx-auto text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Gere um resumo executivo da operação com IA. Ele será incluído no dossiê de distribuição.</p>
+            </div>
+          )}
         </div>
       </div>
 

@@ -988,4 +988,65 @@ Responda em JSON com este formato exato:
 
       return { classificacoes, checklistItems };
     }),
+
+  gerarResumoInteligente: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      checkIaRateLimit((ctx.user as any).id);
+      const op = await getOperacaoById(input.operacaoId);
+      if (!op) throw new TRPCError({ code: "NOT_FOUND" });
+      const user = ctx.user as any;
+      if (user.perfil !== "admin" && op.assessorId !== user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+      const docs = await getDocumentosByOperacao(input.operacaoId);
+      const docsAprovados = docs.filter((d: any) => d.estado === "Aprovado" || d.estado === "Validado");
+      const docsPendentes = docs.filter((d: any) => d.estado === "Pendente" || d.estado === "Pendência encontrada");
+
+      const perfil = (op as any).perfilExtraidoJson as any;
+      const clienteData = perfil?.cliente ?? {};
+      const financeiroData = perfil?.financeiro ?? {};
+
+      const systemPrompt = `Você é um analista de crédito sênior da Ativa Soluções Financeiras.
+Sua tarefa é gerar um RESUMO EXECUTIVO da operação de crédito para uso interno.
+O resumo deve ser objetivo, profissional e ter no máximo 250 palavras.
+Estrutura obrigatória:
+1. Identificação da Operação (produto, valor, prazo, LTV)
+2. Perfil do Tomador (nome, profissão, renda estimada, estado civil)
+3. Garantia Ofertada (tipo, valor, situação)
+4. Situação Documental (documentos aprovados vs pendentes)
+5. Observações Relevantes (pontos de atenção ou diferenciais)
+Não use markdown, bullets ou emojis. Use parágrafos curtos e diretos.`;
+
+      const ltv = (op as any).valorSolicitado && (op as any).valorGarantia
+        ? ((parseFloat((op as any).valorSolicitado) / parseFloat((op as any).valorGarantia)) * 100).toFixed(1) + "%"
+        : "N/D";
+
+      const userMessage = `Operação: ${(op as any).codigoOperacao}
+Produto: ${(op as any).produto ?? "N/D"}
+Valor Solicitado: R$ ${(op as any).valorSolicitado ?? "N/D"}
+Prazo: ${(op as any).prazo ?? "N/D"} meses
+LTV: ${ltv}
+Finalidade: ${(op as any).finalidade ?? "N/D"}
+Tomador: ${(op as any).nomeCliente ?? "N/D"}
+CPF: ${(op as any).cpf ?? "N/D"}
+Estado Civil: ${(op as any).estadoCivil ?? "N/D"}
+Profissão: ${clienteData.profissao ?? "N/D"}
+Renda Estimada: ${financeiroData.renda_mensal_estimada ?? "N/D"}
+Garantia: ${(op as any).tipoGarantiaDescricao ?? "N/D"} — R$ ${(op as any).valorGarantia ?? "N/D"}
+Documentos Aprovados: ${docsAprovados.length}
+Documentos Pendentes: ${docsPendentes.length}
+Contexto: ${(op as any).contextoOperacao ?? "Não informado"}`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+      });
+      const resumo = response?.choices?.[0]?.message?.content ?? "";
+      const resumoTexto = typeof resumo === "string" ? resumo : JSON.stringify(resumo);
+      await updateOperacao(input.operacaoId, { resumoInteligente: resumoTexto } as any);
+      await addLog({ evento: "resumo_inteligente_gerado", detalhe: { operacaoId: input.operacaoId }, usuarioId: user.id, operacaoId: input.operacaoId });
+      return { resumo: resumoTexto };
+    }),
 });
