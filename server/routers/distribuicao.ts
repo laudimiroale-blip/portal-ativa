@@ -46,30 +46,15 @@ function resolverPastaENome(
   const cat = (categoria || "").toLowerCase();
   const nome = nomeDocumento.toLowerCase();
 
-  // Pasta 04 — Cliente
-  if (
-    cat.includes("cliente") ||
-    cat.includes("tomador") ||
-    cat.includes("pessoal") ||
-    nome.includes("rg") ||
-    nome.includes("cnh") ||
-    nome.includes("cpf") ||
-    nome.includes("irpf") ||
-    nome.includes("extrato") ||
-    nome.includes("comprovante de resid") ||
-    nome.includes("certid") ||
-    nome.includes("holerite") ||
-    nome.includes("comprovante de renda")
-  ) {
-    return { pasta: "04_Documentos_Cliente", nomeBase: sanitizeName(nomeDocumento) };
-  }
-
-  // Pasta 05 — Cônjuge
+  // ── Pasta 05 — Cônjuge (verificar primeiro para evitar falso positivo em 04) ──
   if (cat.includes("njuge") || nome.includes("njuge")) {
+    // Renomeação canônica para documentos do cônjuge
+    if (nome.includes("rg") || nome.includes("cnh") || nome.includes("cpf")) return { pasta: "05_Documentos_Conjuge", nomeBase: "RG_ou_CNH_Conjuge" };
+    if (nome.includes("irpf")) return { pasta: "05_Documentos_Conjuge", nomeBase: "IRPF_Conjuge" };
     return { pasta: "05_Documentos_Conjuge", nomeBase: sanitizeName(nomeDocumento) };
   }
 
-  // Pasta 07 — PJ
+  // ── Pasta 07 — PJ ────────────────────────────────────────────────────────────
   if (
     cat.includes("empresarial") ||
     cat.includes("pj") ||
@@ -78,10 +63,15 @@ function resolverPastaENome(
     nome.includes("balan") ||
     nome.includes("faturamento")
   ) {
+    if (nome.includes("contrato social")) return { pasta: "07_Documentos_PJ", nomeBase: "Contrato_Social" };
+    if (nome.includes("cnpj")) return { pasta: "07_Documentos_PJ", nomeBase: "Cartao_CNPJ" };
+    if (nome.includes("balan")) return { pasta: "07_Documentos_PJ", nomeBase: "Balanco_Patrimonial" };
+    if (nome.includes("faturamento")) return { pasta: "07_Documentos_PJ", nomeBase: "Faturamento" };
     return { pasta: "07_Documentos_PJ", nomeBase: sanitizeName(nomeDocumento) };
   }
 
-  // Renomeação canônica: Matrícula atualizada do imóvel → Matricula_Imovel
+  // ── Pasta 06 — Garantia ──────────────────────────────────────────────────────
+  // Matrícula do imóvel (campo unificado)
   if (
     nome.includes("matrícula atualizada") ||
     nome.includes("matricula atualizada") ||
@@ -90,8 +80,57 @@ function resolverPastaENome(
   ) {
     return { pasta: "06_Documentos_Garantia", nomeBase: "Matricula_Imovel" };
   }
+  if (nome.includes("iptu")) return { pasta: "06_Documentos_Garantia", nomeBase: "IPTU" };
+  if (nome.includes("escritura")) return { pasta: "06_Documentos_Garantia", nomeBase: "Escritura" };
+  if (nome.includes("crlv")) return { pasta: "06_Documentos_Garantia", nomeBase: "CRLV" };
+  if (nome.includes("quitacao") || nome.includes("quitação") || nome.includes("financiamento")) return { pasta: "06_Documentos_Garantia", nomeBase: "Comprovante_Quitacao" };
+  if (nome.includes("laudo")) return { pasta: "06_Documentos_Garantia", nomeBase: "Laudo_Avaliacao" };
+  if (nome.includes("alvará") || nome.includes("alvara")) return { pasta: "06_Documentos_Garantia", nomeBase: "Alvara" };
+  if (nome.includes("art") || nome.includes("rrt")) return { pasta: "06_Documentos_Garantia", nomeBase: "ART_RRT" };
+  if (nome.includes("habite-se") || nome.includes("habite_se")) return { pasta: "06_Documentos_Garantia", nomeBase: "Habite_se" };
+  if (nome.includes("projeto")) return { pasta: "06_Documentos_Garantia", nomeBase: "Projeto_Aprovado" };
+  if (nome.includes("orçamento") || nome.includes("orcamento")) return { pasta: "06_Documentos_Garantia", nomeBase: "Orcamento_Obra" };
+  if (nome.includes("cronograma")) return { pasta: "06_Documentos_Garantia", nomeBase: "Cronograma" };
+  if (nome.includes("memorial")) return { pasta: "06_Documentos_Garantia", nomeBase: "Memorial_Descritivo" };
+  if (nome.includes("georreferenciamento")) return { pasta: "06_Documentos_Garantia", nomeBase: "Georreferenciamento" };
+  if (nome.includes("itr")) return { pasta: "06_Documentos_Garantia", nomeBase: "ITR" };
+  if (nome.includes("car") || nome.includes("cadastro ambiental")) return { pasta: "06_Documentos_Garantia", nomeBase: "CAR" };
+  if (nome.includes("ccir")) return { pasta: "06_Documentos_Garantia", nomeBase: "CCIR" };
+  if (nome.includes("cafir")) return { pasta: "06_Documentos_Garantia", nomeBase: "CAFIR" };
+  // Fotos do imóvel/veículo/propriedade → subpasta Fotos/
+  if (nome.includes("foto")) {
+    return { pasta: "06_Documentos_Garantia/Fotos", nomeBase: "Foto" };
+  }
 
-  // Pasta 06 — Garantia (padrão para documentos de imóvel/veículo/rural)
+  // ── Pasta 04 — Cliente ───────────────────────────────────────────────────────
+  if (
+    cat.includes("cliente") ||
+    cat.includes("tomador") ||
+    cat.includes("pessoal") ||
+    cat.includes("renda") ||
+    nome.includes("rg") ||
+    nome.includes("cnh") ||
+    nome.includes("cpf") ||
+    nome.includes("irpf") ||
+    nome.includes("extrato") ||
+    nome.includes("comprovante de resid") ||
+    nome.includes("certid") ||
+    nome.includes("holerite") ||
+    nome.includes("contracheque") ||
+    nome.includes("comprovante de renda")
+  ) {
+    // Renomeação canônica para documentos do cliente
+    if (nome.includes("rg") || nome.includes("cnh") || nome.includes("cpf")) return { pasta: "04_Documentos_Cliente", nomeBase: "RG_ou_CNH_Cliente" };
+    if (nome.includes("irpf")) return { pasta: "04_Documentos_Cliente", nomeBase: "IRPF_Cliente" };
+    if (nome.includes("extrato banc")) return { pasta: "04_Documentos_Cliente", nomeBase: "Extrato_Bancario" };
+    if (nome.includes("comprovante de resid")) return { pasta: "04_Documentos_Cliente", nomeBase: "Comprovante_Residencia" };
+    if (nome.includes("certid")) return { pasta: "04_Documentos_Cliente", nomeBase: "Certidao_Estado_Civil" };
+    if (nome.includes("holerite") || nome.includes("contracheque")) return { pasta: "04_Documentos_Cliente", nomeBase: "Contracheque" };
+    if (nome.includes("comprovante de renda")) return { pasta: "04_Documentos_Cliente", nomeBase: "Comprovante_Renda" };
+    return { pasta: "04_Documentos_Cliente", nomeBase: sanitizeName(nomeDocumento) };
+  }
+
+  // Padrão: Garantia
   return { pasta: "06_Documentos_Garantia", nomeBase: sanitizeName(nomeDocumento) };
 }
 
@@ -285,9 +324,10 @@ export const distribuicaoRouter = router({
             // 03 — Termo SCR (se disponível — placeholder)
             // Futuramente: buscar termoScr assinado e adicionar aqui
 
-            // Mapear documentos por pasta com renomeação
+            // Mapear documentos por pasta com renomeação canônica
+            // Inclui documentos com arquivoKey OU arquivoUrl (fallback)
             const contagemPorNome: Record<string, number> = {};
-            const docsComArquivo = docs.filter((d) => d.arquivoKey && !d.naoAplicavel);
+            const docsComArquivo = docs.filter((d) => !d.naoAplicavel && (d.arquivoKey || d.arquivoUrl));
 
             for (const doc of docsComArquivo) {
               const { pasta, nomeBase } = resolverPastaENome(
@@ -298,23 +338,35 @@ export const distribuicaoRouter = router({
                 0,
               );
 
-              // Determinar extensão do arquivo
-              const ext = (doc.arquivoKey || "").split(".").pop()?.toLowerCase() || "pdf";
+              // Determinar extensão do arquivo a partir da key ou url
+              const refPath = doc.arquivoKey || doc.arquivoUrl || "";
+              const ext = refPath.split(".").pop()?.toLowerCase().split("?")[0] || "pdf";
 
-              // Controle de duplicatas
-              contagemPorNome[nomeBase] = (contagemPorNome[nomeBase] || 0) + 1;
-              const sufixo = contagemPorNome[nomeBase] > 1 ? `_${String(contagemPorNome[nomeBase]).padStart(2, "0")}` : "";
+              // Controle de duplicatas por pasta+nome
+              const chave = `${pasta}/${nomeBase}`;
+              contagemPorNome[chave] = (contagemPorNome[chave] || 0) + 1;
+              const sufixo = contagemPorNome[chave] > 1 ? `_${String(contagemPorNome[chave]).padStart(2, "0")}` : "";
               const nomeArquivo = `${nomeBase}${sufixo}.${ext}`;
 
-              // Baixar arquivo do S3
+              // Baixar arquivo do S3: tentar via arquivoKey (signed URL) primeiro, depois arquivoUrl direto
               try {
-                const signedUrl = await storageGetSignedUrl(doc.arquivoKey!);
-                const resp = await fetch(signedUrl);
+                let downloadUrl: string;
+                if (doc.arquivoKey) {
+                  downloadUrl = await storageGetSignedUrl(doc.arquivoKey);
+                } else {
+                  // arquivoUrl pode ser relativa (/manus-storage/...) — converter para absoluta
+                  const baseUrl = process.env.BUILT_IN_FORGE_API_URL?.replace("/api", "") ?? "";
+                  downloadUrl = doc.arquivoUrl!.startsWith("http") ? doc.arquivoUrl! : `${baseUrl}${doc.arquivoUrl!}`;
+                }
+                const resp = await fetch(downloadUrl);
                 if (resp.ok) {
                   const buf = Buffer.from(await resp.arrayBuffer());
                   addBuffer(buf, `${pasta}/${nomeArquivo}`);
+                } else {
+                  console.warn(`[ZIP] Falha ao baixar ${doc.nomeDocumento}: HTTP ${resp.status}`);
                 }
-              } catch {
+              } catch (err) {
+                console.warn(`[ZIP] Erro ao baixar ${doc.nomeDocumento}:`, err);
                 // Arquivo não disponível — pular silenciosamente
               }
             }

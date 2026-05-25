@@ -503,3 +503,11 @@
 - [x] Campo obrigatório para Home Equity, Rural Equity e Imóvel em Construção
 - [x] Renomeação no ZIP: Matricula_Imovel.pdf
 - [x] Prompt da IA: reconhecer matrícula e escritura como documentos válidos para este campo
+
+## Bug Crítico — Exportação ZIP sem documentos do cliente
+
+- [x] Corrigir exportarDossie para buscar todos os documentos da operação no banco e fazer download do storage
+- [x] Incluir cada documento na pasta correta (04_Cliente, 05_Conjuge, 06_Garantia, 07_PJ)
+- [x] Renomear arquivos canonicamente por tipo documental (RG_ou_CNH_Cliente, Extrato_Bancario_01, Foto_Imovel_01, etc.)
+- [x] Fotos do imóvel/veículo: incluir TODAS em 06_Documentos_Garantia/Fotos/
+- [x] Ignorar documentos sem arquivo enviado (sem arquivoUrl)
