@@ -105,7 +105,7 @@ export const iaRouter = router({
 ANALISE CADA DOCUMENTO E VERIFIQUE:
 1. Tipo e correspondência com o campo solicitado
 2. Legibilidade (sem cortes, sem partes ilegíveis)
-3. Validade (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
+3. Validade (IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
 4. Pertinência ao titular declarado
 5. Completude (não faltam páginas)
 6. Consistência com os demais dados da operação
@@ -311,7 +311,7 @@ PARA CADA DOCUMENTO ANALISE:
 1. Tipo real: leia o conteúdo e identifique o tipo real (CNH, RG, CPF, Matrícula, IPTU, Extrato Bancário, Holerite, IRPF, Certidão, Escritura, etc.)
 2. Correspondência: o documento enviado é realmente o que o campo solicita?
 3. Legibilidade: está legível, sem cortes, sem partes ilegíveis?
-4. Validade: está dentro do prazo? (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
+4. Validade: está dentro do prazo? (IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido)
 5. Pertinência ao titular: CPF/nome bate com o tomador?
 6. Completude: está completo ou faltam páginas?
 7. Duplicidade: o mesmo documento foi enviado em campos diferentes?
@@ -450,7 +450,7 @@ PARA CADA DOCUMENTO ANALISE:
 1. Tipo real: leia o conteúdo e identifique o tipo real do documento (CNH, RG, CPF, Matrícula, IPTU, Extrato Bancário, Holerite, IRPF, Certidão, Escritura, etc.)
 2. Correspondência: o documento enviado é realmente o que o campo solicita?
 3. Legibilidade: está legível, sem cortes, sem partes ilegíveis, sem borramentos?
-4. Validade: está dentro do prazo? (Matrícula: máx 30 dias; IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido; Certidões: máx 90 dias)
+4. Validade: está dentro do prazo? (IPTU: exercício atual; Extrato: últimos 3 meses; CNH/RG: não vencido; Certidões: máx 90 dias)
 5. Pertinência ao titular: o CPF/nome no documento bate com o tomador ou cônjuge declarado?
 6. Completude: está completo ou faltam páginas/verso?
 7. Consistência: dados do documento batem com os demais documentos da operação?
@@ -461,7 +461,7 @@ DETECÇÃO AUTOMÁTICA:
 - CPF/nome divergente: marcar semaforo=vermelho com motivo "CPF/nome não corresponde ao titular"
 - Documento ilegível: marcar semaforo=vermelho com motivo "Imagem ilegível — [detalhe]"
 - Documento incorreto (ex: enviou extrato no campo de matrícula): marcar semaforo=vermelho com motivo "Documento incorreto: enviado [tipo real], esperado [tipo correto]"
-REGRA ESPECIAL — CAMPO "Matrícula atualizada do imóvel": Aceitar como válido tanto a Matrícula do Imóvel (emitida pelo Cartório de Registro de Imóveis, até 30 dias) quanto a Escritura Pública de Compra e Venda ou Escritura de Doação (aceita quando o imóvel não possui matrícula individualizada). Não marcar como incorreto se o usuário enviou escritura neste campo.
+REGRA ESPECIAL — CAMPO "Matrícula atualizada do imóvel": Aceitar como válido tanto a Matrícula do Imóvel (emitida pelo Cartório de Registro de Imóveis, sem restrição de prazo) quanto a Escritura Pública de Compra e Venda ou Escritura de Doação (aceita quando o imóvel não possui matrícula individualizada). Não marcar como incorreto se o usuário enviou escritura neste campo. Não reprovar por data da matrícula (sem restrição de validade).
 - Documento duplicado: marcar semaforo=amarelo com motivo "Possível duplicata do documento [campo]"
 
 SEMÁFORO:

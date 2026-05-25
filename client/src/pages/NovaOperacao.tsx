@@ -446,7 +446,7 @@ function Etapa2DadosOperacao({
     if (!dados.valorGarantia?.trim()) e.valorGarantia = "Valor da garantia obrigatório";
     if (!dados.tipoGarantiaDescricao?.trim()) e.tipoGarantiaDescricao = "Tipo de garantia obrigatório";
     if (!dados.prazo || dados.prazo < 1) e.prazo = "Prazo obrigatório";
-    if (!dados.finalidade?.trim()) e.finalidade = "Finalidade obrigatória";
+
     setErros(e);
     return Object.keys(e).length === 0;
   };
@@ -472,7 +472,7 @@ function Etapa2DadosOperacao({
         dividaAtual: dados.dividaAtual,
         prazo: dados.prazo!,
         finalidadePrincipal: dados.finalidadePrincipal as any,
-        finalidade: dados.finalidade!,
+        finalidade: dados.finalidade ?? "",
         origemRenda: dadosCliente.origemRenda as any,
         contextoOperacao: dados.contextoOperacao,
         statusRascunho: rascunho,
@@ -669,16 +669,7 @@ function Etapa2DadosOperacao({
           </Select>
         </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-sm text-muted-foreground">Detalhamento da Finalidade *</Label>
-          <Input
-            value={dados.finalidade ?? ""}
-            onChange={(e) => set("finalidade", e.target.value)}
-            placeholder="Ex: Capital de giro para expansão da frota, reforma do imóvel..."
-            className={cn("bg-background/50", erros.finalidade && "border-red-500")}
-          />
-          {erros.finalidade && <p className="text-xs text-red-400">{erros.finalidade}</p>}
-        </div>
+
       </div>
 
       {ltv && (
