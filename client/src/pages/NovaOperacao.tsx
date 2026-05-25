@@ -34,7 +34,8 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { PRODUTOS, getGarantiasPorProduto, type Produto } from "@shared/produtos-garantias";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -50,7 +51,7 @@ interface DadosCliente {
 }
 
 interface DadosOperacao {
-  produto: "Home Equity" | "Auto Equity" | "Rural Equity" | "Imóvel em Construção";
+  produto: Produto;
   valorSolicitado: string;
   valorGarantia: string;
   tipoGarantiaDescricao: string;
@@ -463,12 +464,19 @@ function Etapa2DadosOperacao({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="text-sm text-muted-foreground">Produto *</Label>
-          <Select value={dados.produto ?? ""} onValueChange={(v) => set("produto", v)}>
+          <Select
+            value={dados.produto ?? ""}
+            onValueChange={(v) => {
+              set("produto", v);
+              // Limpar tipo de garantia ao trocar produto (pode ser incompatível)
+              set("tipoGarantiaDescricao", "");
+            }}
+          >
             <SelectTrigger className={cn("bg-background/50", erros.produto && "border-red-500")}>
               <SelectValue placeholder="Selecione o produto" />
             </SelectTrigger>
             <SelectContent>
-              {["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"].map((v) => (
+              {PRODUTOS.map((v) => (
                 <SelectItem key={v} value={v}>{v}</SelectItem>
               ))}
             </SelectContent>
@@ -492,13 +500,33 @@ function Etapa2DadosOperacao({
           error={erros.valorGarantia}
         />
 
-        <FieldInput
-          label="Tipo de Garantia *"
-          value={dados.tipoGarantiaDescricao ?? ""}
-          onChange={(v) => set("tipoGarantiaDescricao", v)}
-          placeholder="Ex: Imóvel residencial, Veículo, Fazenda..."
-          error={erros.tipoGarantiaDescricao}
-        />
+        {/* Tipo de Garantia — dinâmico conforme produto selecionado */}
+        <div className="space-y-1.5">
+          <Label className="text-sm text-muted-foreground">Tipo de Garantia *</Label>
+          {dados.produto ? (
+            <Select
+              value={dados.tipoGarantiaDescricao ?? ""}
+              onValueChange={(v) => set("tipoGarantiaDescricao", v)}
+            >
+              <SelectTrigger className={cn("bg-background/50", erros.tipoGarantiaDescricao && "border-red-500")}>
+                <SelectValue placeholder="Selecione o tipo de garantia" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {getGarantiasPorProduto(dados.produto).map((g) => (
+                  <SelectItem key={g} value={g}>{g}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/30 text-sm text-muted-foreground cursor-not-allowed">
+              <Shield className="w-3.5 h-3.5 opacity-50" />
+              <span>Selecione um produto primeiro</span>
+            </div>
+          )}
+          {erros.tipoGarantiaDescricao && (
+            <p className="text-xs text-red-400">{erros.tipoGarantiaDescricao}</p>
+          )}
+        </div>
 
         <div className="space-y-1.5">
           <Label className="text-sm text-muted-foreground">Prazo (meses) *</Label>

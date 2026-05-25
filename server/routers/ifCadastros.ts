@@ -85,7 +85,7 @@ export const ifCadastrosRouter = router({
   salvarCondicao: adminPerfilProcedure
     .input(z.object({
       ifId: z.number(),
-      produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"]),
+      produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção", "Crédito para Construção / Término de Obra"]),
       taxaMinima: z.string().optional(),
       taxaMaxima: z.string().optional(),
       ltvMaximo: z.string().optional(),

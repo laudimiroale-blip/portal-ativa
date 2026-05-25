@@ -192,3 +192,69 @@ describe("Checklist por produto", () => {
     expect(ruralDocs).toContain("CAR — Cadastro Ambiental Rural");
   });
 });
+
+// ─── Produto × Garantia — estrutura dinâmica ─────────────────────────────────
+
+import { PRODUTOS, GARANTIAS_POR_PRODUTO, getGarantiasPorProduto, isGarantiaCompativel, TODAS_GARANTIAS } from "../shared/produtos-garantias";
+
+describe("Produto × Garantia — estrutura dinâmica", () => {
+  it("deve ter exatamente 4 produtos definidos", () => {
+    expect(PRODUTOS).toHaveLength(4);
+    expect(PRODUTOS).toContain("Home Equity");
+    expect(PRODUTOS).toContain("Auto Equity");
+    expect(PRODUTOS).toContain("Rural Equity");
+    expect(PRODUTOS).toContain("Crédito para Construção / Término de Obra");
+  });
+
+  it("Home Equity deve ter 18 tipos de garantia", () => {
+    expect(GARANTIAS_POR_PRODUTO["Home Equity"]).toHaveLength(18);
+    expect(GARANTIAS_POR_PRODUTO["Home Equity"]).toContain("Apartamento");
+    expect(GARANTIAS_POR_PRODUTO["Home Equity"]).toContain("Galpão");
+    expect(GARANTIAS_POR_PRODUTO["Home Equity"]).toContain("Terreno Industrial");
+  });
+
+  it("Auto Equity deve ter 12 tipos de garantia", () => {
+    expect(GARANTIAS_POR_PRODUTO["Auto Equity"]).toHaveLength(12);
+    expect(GARANTIAS_POR_PRODUTO["Auto Equity"]).toContain("Caminhão");
+    expect(GARANTIAS_POR_PRODUTO["Auto Equity"]).toContain("Máquina Agrícola");
+  });
+
+  it("Rural Equity deve ter 13 tipos de garantia", () => {
+    expect(GARANTIAS_POR_PRODUTO["Rural Equity"]).toHaveLength(13);
+    expect(GARANTIAS_POR_PRODUTO["Rural Equity"]).toContain("Fazenda");
+    expect(GARANTIAS_POR_PRODUTO["Rural Equity"]).toContain("Haras");
+  });
+
+  it("Crédito para Construção deve ter 14 tipos de garantia", () => {
+    expect(GARANTIAS_POR_PRODUTO["Crédito para Construção / Término de Obra"]).toHaveLength(14);
+    expect(GARANTIAS_POR_PRODUTO["Crédito para Construção / Término de Obra"]).toContain("Terreno Residencial");
+    expect(GARANTIAS_POR_PRODUTO["Crédito para Construção / Término de Obra"]).toContain("Obra Paralisada");
+  });
+
+  it("getGarantiasPorProduto deve retornar lista correta", () => {
+    expect(getGarantiasPorProduto("Auto Equity")).toContain("Van");
+    expect(getGarantiasPorProduto("produto-inexistente")).toHaveLength(0);
+  });
+
+  it("isGarantiaCompativel deve validar corretamente", () => {
+    expect(isGarantiaCompativel("Home Equity", "Apartamento")).toBe(true);
+    expect(isGarantiaCompativel("Home Equity", "Caminhão")).toBe(false);
+    expect(isGarantiaCompativel("Auto Equity", "Caminhão")).toBe(true);
+    expect(isGarantiaCompativel("Rural Equity", "Fazenda")).toBe(true);
+    expect(isGarantiaCompativel("Rural Equity", "Apartamento")).toBe(false);
+  });
+
+  it("TODAS_GARANTIAS deve ser lista ordenada sem duplicatas", () => {
+    const uniq = new Set(TODAS_GARANTIAS);
+    expect(uniq.size).toBe(TODAS_GARANTIAS.length);
+    const sorted = [...TODAS_GARANTIAS].sort();
+    expect(TODAS_GARANTIAS).toEqual(sorted);
+  });
+
+  it("garantias de Auto e Home Equity não devem se sobrepor", () => {
+    const autoGarantias = getGarantiasPorProduto("Auto Equity");
+    const homeGarantias = getGarantiasPorProduto("Home Equity");
+    const intersecao = autoGarantias.filter((g) => homeGarantias.includes(g));
+    expect(intersecao).toHaveLength(0);
+  });
+});

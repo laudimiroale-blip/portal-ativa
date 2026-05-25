@@ -8,6 +8,7 @@ import { Archive, ArchiveRestore, Filter, FolderOpen, Play, Plus, Search, Trash2
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { PRODUTOS } from "@shared/produtos-garantias";
 
 const STATUS_OPTIONS = [
   "Pré-cadastro", "Aguardando documentos", "Documentação parcial", "Documentos ilegíveis", "Aguardando SCR",
@@ -15,7 +16,7 @@ const STATUS_OPTIONS = [
   "Distribuída", "Em retorno bancário", "Aguardando cliente", "Aprovada", "Reprovada", "Cancelada", "Stand-by", "Arquivada",
 ];
 
-const PRODUTO_OPTIONS = ["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"];
+const PRODUTO_OPTIONS = [...PRODUTOS];
 const PRIORIDADE_OPTIONS = ["Urgente", "Alta", "Normal", "Baixa"];
 
 export default function Operacoes() {

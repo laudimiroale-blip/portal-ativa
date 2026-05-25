@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
+import { PRODUTOS } from "@shared/produtos-garantias";
 
 // ─── Mapeamento de Status para Colunas do Kanban ─────────────────────────────
 
@@ -622,10 +623,9 @@ export default function FilaOperacional() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos os produtos</SelectItem>
-                  <SelectItem value="Home Equity">Home Equity</SelectItem>
-                  <SelectItem value="Auto Equity">Auto Equity</SelectItem>
-                  <SelectItem value="Rural Equity">Rural Equity</SelectItem>
-                  <SelectItem value="Imóvel em Construção">Imóvel em Construção</SelectItem>
+                  {PRODUTOS.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

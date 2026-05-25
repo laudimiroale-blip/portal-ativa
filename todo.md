@@ -430,3 +430,17 @@
 - [x] Índices SQL nas tabelas mais consultadas (operacoes, documentos, historico_status_operacao, notificacoes)
 - [x] Rate limiting nas procedures de IA (middleware tRPC)
 - [x] Procedure `ia.statusConferencia` para polling sem sobrecarga
+
+## Seleção Dinâmica Produto × Garantia
+
+- [x] Criar `shared/produtos-garantias.ts` com mapa parametrizável (4 produtos, 57 garantias)
+- [x] Adicionar produto "Crédito para Construção / Término de Obra" no enum do banco (operacoes + if_condicoes)
+- [x] Wizard NovaOperacao: Select de Tipo de Garantia dinâmico (filtra por produto, limpa ao trocar)
+- [x] Placeholder "Selecione um produto primeiro" quando nenhum produto está selecionado
+- [x] Atualizar z.enum de produto nos routers: operacoes.criar e ifCadastros.salvarCondicao
+- [x] Adicionar checklist de documentos para "Crédito para Construção / Término de Obra"
+- [x] GestaoIFs: substituir PRODUTOS local pelo import do shared
+- [x] Operacoes: substituir PRODUTO_OPTIONS local pelo import do shared
+- [x] FilaOperacional: substituir SelectItems hardcoded pelo import do shared
+- [x] 8 novos testes unitários cobrindo mapa dinâmico, isGarantiaCompativel, TODAS_GARANTIAS
+- [x] 23/23 testes passando, 0 erros TypeScript

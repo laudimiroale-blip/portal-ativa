@@ -71,6 +71,13 @@
       "when": 1779649778013,
       "tag": "0009_whole_toxin",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1779668177036,
+      "tag": "0010_sturdy_silverclaw",
+      "breakpoints": true
     }
   ]
 }

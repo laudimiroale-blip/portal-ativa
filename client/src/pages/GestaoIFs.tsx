@@ -28,8 +28,7 @@ import {
 import { useState } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-const PRODUTOS = ["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"] as const;
+import { PRODUTOS } from "@shared/produtos-garantias";
 
 const STATUS_COLORS: Record<string, string> = {
   Ativa: "bg-green-500/20 text-green-400 border-green-500/30",

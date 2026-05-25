@@ -1,0 +1,2 @@
+ALTER TABLE `if_condicoes` MODIFY COLUMN `produto` enum('Home Equity','Auto Equity','Rural Equity','Imóvel em Construção','Crédito para Construção / Término de Obra') NOT NULL;--> statement-breakpoint
+ALTER TABLE `operacoes` MODIFY COLUMN `produto` enum('Home Equity','Auto Equity','Rural Equity','Imóvel em Construção','Crédito para Construção / Término de Obra') NOT NULL;

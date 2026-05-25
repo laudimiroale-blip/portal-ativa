@@ -103,6 +103,23 @@ async function inicializarChecklist(codigoOperacao: string, produto: string) {
       { nome: "Fotos da obra", categoria: "Obra" },
       { nome: "Orçamento da construção", categoria: "Obra" },
     ],
+    "Crédito para Construção / Término de Obra": [
+      { nome: "RG/CPF ou CNH", categoria: "Pessoal" },
+      { nome: "Comprovante de residência (até 90 dias)", categoria: "Pessoal" },
+      { nome: "IRPF — declaração + recibo", categoria: "Pessoal" },
+      { nome: "Certidão de estado civil", categoria: "Pessoal" },
+      { nome: "Extratos bancários PF — 3 meses", categoria: "Renda" },
+      { nome: "Contracheques — 3 meses (CLT)", categoria: "Renda", opcional: true },
+      { nome: "Matrícula do terreno / imóvel", categoria: "Obra" },
+      { nome: "Alvará de construção vigente", categoria: "Obra" },
+      { nome: "Projeto arquitetônico aprovado", categoria: "Obra" },
+      { nome: "ART ou RRT do responsável técnico", categoria: "Obra" },
+      { nome: "Cronograma físico-financeiro", categoria: "Obra" },
+      { nome: "Orçamento detalhado da obra", categoria: "Obra" },
+      { nome: "Fotos atuais da obra / terreno", categoria: "Obra" },
+      { nome: "Habite-se parcial (se aplicável)", categoria: "Obra", opcional: true },
+      { nome: "Memorial descritivo", categoria: "Obra", opcional: true },
+    ],
   };
 
   const itens = checklistPorProduto[produto] ?? [];
@@ -170,7 +187,7 @@ export const operacoesRouter = router({
       cpfConjuge: z.string().optional(),
       emailConjuge: z.string().optional(),
       telefoneConjuge: z.string().optional(),
-      produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção"]).optional().default("Home Equity"),
+      produto: z.enum(["Home Equity", "Auto Equity", "Rural Equity", "Imóvel em Construção", "Crédito para Construção / Término de Obra"]).optional().default("Home Equity"),
       valorSolicitado: z.string().optional().default("0"),
       prazo: z.number().min(1).optional().default(12),
       finalidade: z.string().optional().default(""),
