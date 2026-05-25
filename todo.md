@@ -494,3 +494,12 @@
 - [x] Melhoria D: Remover aba "Análise IA (Admin)" do DetalheOperacao
 - [x] Melhoria E: Aba Instituições — botões Distribuir/Pendenciar com mudança de status + histórico
 - [x] Melhoria F: Aba Distribuição — Preview PDF com loading state + modal com skeleton + iframe quando pronto
+
+## Unificação Matrícula + Escritura no Checklist
+
+- [x] Unificar "Matrícula atualizada do imóvel" + "Escritura (se disponível)" em campo único "Matrícula atualizada do imóvel" nos produtos Home Equity, Rural Equity, Imóvel em Construção e Crédito para Construção
+- [x] Descrição do campo: "Matrícula atualizada emitida pelo Cartório de Registro de Imóveis (até 30 dias). Escritura aceita apenas se imóvel não possui matrícula individualizada."
+- [x] Campo aceita múltiplos arquivos (múltiplas páginas) — já suportado pelo sistema de upload
+- [x] Campo obrigatório para Home Equity, Rural Equity e Imóvel em Construção
+- [x] Renomeação no ZIP: Matricula_Imovel.pdf
+- [x] Prompt da IA: reconhecer matrícula e escritura como documentos válidos para este campo

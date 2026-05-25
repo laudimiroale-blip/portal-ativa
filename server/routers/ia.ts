@@ -461,6 +461,7 @@ DETECÇÃO AUTOMÁTICA:
 - CPF/nome divergente: marcar semaforo=vermelho com motivo "CPF/nome não corresponde ao titular"
 - Documento ilegível: marcar semaforo=vermelho com motivo "Imagem ilegível — [detalhe]"
 - Documento incorreto (ex: enviou extrato no campo de matrícula): marcar semaforo=vermelho com motivo "Documento incorreto: enviado [tipo real], esperado [tipo correto]"
+REGRA ESPECIAL — CAMPO "Matrícula atualizada do imóvel": Aceitar como válido tanto a Matrícula do Imóvel (emitida pelo Cartório de Registro de Imóveis, até 30 dias) quanto a Escritura Pública de Compra e Venda ou Escritura de Doação (aceita quando o imóvel não possui matrícula individualizada). Não marcar como incorreto se o usuário enviou escritura neste campo.
 - Documento duplicado: marcar semaforo=amarelo com motivo "Possível duplicata do documento [campo]"
 
 SEMÁFORO:

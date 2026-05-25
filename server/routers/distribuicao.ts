@@ -81,6 +81,16 @@ function resolverPastaENome(
     return { pasta: "07_Documentos_PJ", nomeBase: sanitizeName(nomeDocumento) };
   }
 
+  // Renomeação canônica: Matrícula atualizada do imóvel → Matricula_Imovel
+  if (
+    nome.includes("matrícula atualizada") ||
+    nome.includes("matricula atualizada") ||
+    nome.includes("matrícula do terreno") ||
+    nome.includes("matricula do terreno")
+  ) {
+    return { pasta: "06_Documentos_Garantia", nomeBase: "Matricula_Imovel" };
+  }
+
   // Pasta 06 — Garantia (padrão para documentos de imóvel/veículo/rural)
   return { pasta: "06_Documentos_Garantia", nomeBase: sanitizeName(nomeDocumento) };
 }
