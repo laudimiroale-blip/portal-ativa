@@ -14,10 +14,12 @@ import {
   Building2,
   CheckCircle2,
   Clock,
+  Download,
   FileText,
   History,
   Info,
   Loader2,
+  Package,
   Plus,
   RefreshCw,
   Shield,
@@ -30,7 +32,7 @@ import { useRef, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
-type Tab = "documentos" | "dados" | "ia" | "ifs" | "historico";
+type Tab = "documentos" | "dados" | "ia" | "ifs" | "historico" | "distribuicao";
 
 interface Props {
   params: { id: string };
@@ -84,6 +86,7 @@ export default function DetalheOperacao({ params }: Props) {
     ...(isAdmin ? [{ id: "ia" as Tab, label: "Análise IA", icon: Bot }] : []),
     { id: "ifs" as Tab, label: "Instituições", icon: Building2 },
     { id: "historico" as Tab, label: "Histórico", icon: History },
+    ...(isAdmin ? [{ id: "distribuicao" as Tab, label: "Distribuição", icon: Package }] : []),
   ];
 
   if (isLoading) {
@@ -207,6 +210,7 @@ export default function DetalheOperacao({ params }: Props) {
           {activeTab === "ia" && isAdmin && <TabAnaliseIA operacaoId={operacaoId} operacao={operacao} userId={(user as any)?.id} />}
           {activeTab === "ifs" && <TabIFs operacaoId={operacaoId} isAdmin={isAdmin} userId={(user as any)?.id} produto={(operacao as any)?.produto} valorSolicitado={Number((operacao as any)?.valorSolicitado) || undefined} valorGarantia={Number((operacao as any)?.valorGarantia) || undefined} prazo={Number((operacao as any)?.prazo) || undefined} />}
           {activeTab === "historico" && <TabHistorico operacaoId={operacaoId} />}
+          {activeTab === "distribuicao" && isAdmin && <TabDistribuicao operacaoId={operacaoId} operacao={operacao} />}
         </div>
       </div>
 
@@ -1245,5 +1249,257 @@ function IFStatusBadge({ status }: { status: string }) {
     <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap", classes[status] ?? "bg-zinc-700/50 text-zinc-400 border-zinc-600/30")}>
       {status}
     </span>
+  );
+}
+
+// ─── Tab Distribuição ─────────────────────────────────────────────────────────
+function TabDistribuicao({ operacaoId, operacao }: { operacaoId: number; operacao: any }) {
+  const utils = trpc.useUtils();
+  const [etapa, setEtapa] = useState<string | null>(null);
+  const [progresso, setProgresso] = useState(0);
+  const [exportando, setExportando] = useState(false);
+  const [pendenciasModal, setPendenciasModal] = useState<string[] | null>(null);
+
+  const { data: exportacoes, refetch: refetchExportacoes } = trpc.distribuicao.listarExportacoes.useQuery({ operacaoId });
+
+  const exportarMutation = trpc.distribuicao.exportarDossie.useMutation({
+    onSuccess: (data) => {
+      if (data.requerConfirmacao && data.pendencias.length > 0) {
+        setPendenciasModal(data.pendencias);
+        setExportando(false);
+        setEtapa(null);
+        setProgresso(0);
+        return;
+      }
+      setEtapa("Pronto!");
+      setProgresso(100);
+      setTimeout(() => {
+        setExportando(false);
+        setEtapa(null);
+        setProgresso(0);
+        refetchExportacoes();
+        if (data.zipUrl) {
+          window.open(data.zipUrl, "_blank");
+        }
+        toast.success("Dossiê exportado com sucesso!");
+      }, 1200);
+    },
+    onError: (err) => {
+      setExportando(false);
+      setEtapa(null);
+      setProgresso(0);
+      toast.error("Erro ao exportar: " + err.message);
+    },
+  });
+
+  const ETAPAS = [
+    "Coletando documentos...",
+    "Renomeando arquivos...",
+    "Gerando PDFs...",
+    "Montando ZIP...",
+    "Enviando para armazenamento...",
+  ];
+
+  async function iniciarExportacao(forcar = false) {
+    setExportando(true);
+    setProgresso(0);
+
+    // Simular progresso visual enquanto o backend processa
+    let step = 0;
+    const interval = setInterval(() => {
+      if (step < ETAPAS.length) {
+        setEtapa(ETAPAS[step]);
+        setProgresso(Math.round(((step + 1) / (ETAPAS.length + 1)) * 90));
+        step++;
+      }
+    }, 900);
+
+    try {
+      await exportarMutation.mutateAsync({ operacaoId, forcarMesmoComPendencias: forcar });
+    } finally {
+      clearInterval(interval);
+    }
+  }
+
+  const statusOperacao = (operacao as any)?.statusMacro;
+  const prontaParaDistribuicao = statusOperacao === "Pronta para distribuição" || statusOperacao === "Em distribuição" || statusOperacao === "Distribuída";
+
+  return (
+    <div className="space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">Exportar Dossiê</h3>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Gera um arquivo ZIP com todos os documentos organizados em pastas, PDF de resumo e defesa de crédito.
+          </p>
+        </div>
+        <button
+          onClick={() => iniciarExportacao(false)}
+          disabled={exportando}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
+            "bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20",
+            "disabled:opacity-60 disabled:cursor-not-allowed",
+          )}
+        >
+          {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
+          {exportando ? "Exportando..." : "Exportar Operação"}
+        </button>
+      </div>
+
+      {/* Aviso se não está pronta */}
+      {!prontaParaDistribuicao && (
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+          <p className="text-sm text-amber-300">
+            Esta operação está com status <strong>{statusOperacao}</strong>. Recomenda-se exportar apenas operações com status "Pronta para distribuição" ou superior.
+          </p>
+        </div>
+      )}
+
+      {/* Barra de progresso */}
+      {exportando && (
+        <div className="p-4 rounded-lg bg-card border border-border space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{etapa || "Iniciando..."}</span>
+            <span className="text-primary font-medium">{progresso}%</span>
+          </div>
+          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-500 rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${progresso}%` }}
+            />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {ETAPAS.map((e, i) => (
+              <span
+                key={e}
+                className={cn(
+                  "text-[10px] px-2 py-0.5 rounded-full border",
+                  progresso >= Math.round(((i + 1) / (ETAPAS.length + 1)) * 90)
+                    ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                    : "bg-muted text-muted-foreground border-border",
+                )}
+              >
+                {e.replace("...", "")}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Estrutura do ZIP */}
+      <div className="p-4 rounded-lg bg-card border border-border">
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Estrutura do Dossiê</h4>
+        <div className="space-y-1 text-sm font-mono">
+          {[
+            { pasta: "01_Defesa_de_Credito.pdf", desc: "Defesa gerada pela IA" },
+            { pasta: "02_Resumo_da_Operacao.pdf", desc: "Dados completos da operação" },
+            { pasta: "04_Documentos_Cliente/", desc: "RG, CPF, IRPF, renda..." },
+            { pasta: "05_Documentos_Conjuge/", desc: "Documentos do cônjuge (se aplicável)" },
+            { pasta: "06_Documentos_Garantia/", desc: "Matrícula, IPTU, fotos..." },
+            { pasta: "07_Documentos_PJ/", desc: "Contrato social, balanço..." },
+            { pasta: "08_Documentos_Complementares/", desc: "Outros anexos" },
+          ].map(({ pasta, desc }) => (
+            <div key={pasta} className="flex items-center gap-3 py-1 border-b border-border/50 last:border-0">
+              <span className="text-primary/80 text-xs">{pasta}</span>
+              <span className="text-muted-foreground text-xs ml-auto">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Histórico de exportações */}
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Histórico de Exportações</h4>
+        {!exportacoes || exportacoes.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            Nenhuma exportação realizada ainda.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {exportacoes.map((exp) => (
+              <div key={exp.id} className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
+                <div className={cn("w-2 h-2 rounded-full shrink-0", exp.status === "completa" ? "bg-emerald-500" : "bg-amber-500")} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium text-foreground">
+                      {exp.status === "completa" ? "Exportação completa" : "Exportação com pendências"}
+                    </span>
+                    <span className="text-muted-foreground text-xs">·</span>
+                    <span className="text-muted-foreground text-xs">{exp.totalDocs} doc(s)</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {exp.nomeUsuario || "Sistema"} · {format(new Date(exp.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                  </div>
+                  {Boolean(exp.pendencias && Array.isArray(exp.pendencias) && (exp.pendencias as unknown[]).length > 0) && (
+                    <div className="text-xs text-amber-400 mt-1">
+                      Pendências: {Array.isArray(exp.pendencias) ? (exp.pendencias as unknown[]).map(String).join(", ") : ""}
+                    </div>
+                  )}
+                </div>
+                {exp.zipUrl && (
+                  <a
+                    href={exp.zipUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs font-medium text-foreground transition-colors"
+                  >
+                    <Download className="w-3 h-3" />
+                    Baixar
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal de pendências */}
+      {pendenciasModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-semibold text-foreground">Documentos pendentes</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Os seguintes documentos ainda estão pendentes ou reprovados:
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-1 max-h-48 overflow-y-auto">
+              {pendenciasModal.map((p) => (
+                <li key={p} className="flex items-center gap-2 text-sm text-amber-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  {p}
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-muted-foreground">
+              Deseja exportar mesmo assim? O dossiê será marcado como "com pendências".
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setPendenciasModal(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-muted hover:bg-muted/80 text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setPendenciasModal(null);
+                  iniciarExportacao(true);
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-black transition-colors"
+              >
+                Exportar mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

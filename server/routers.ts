@@ -27,6 +27,7 @@ import { historicoRouter } from "./routers/historico";
 import { ifCadastrosRouter } from "./routers/ifCadastros";
 import { distribuicoesRouter } from "./routers/distribuicoes";
 import { termoScrRouter } from "./routers/termoScr";
+import { distribuicaoRouter } from "./routers/distribuicao";
 
 // ─── App Router ──────────────────────────────────────────────────────────────
 export const appRouter = router({
@@ -52,6 +53,7 @@ export const appRouter = router({
   ifCadastros: ifCadastrosRouter,
   distribuicoes: distribuicoesRouter,
   termoScr: termoScrRouter,
+  distribuicao: distribuicaoRouter,
 
   // ─── IFs por operação (Instituições Financeiras)
   ifs: router({

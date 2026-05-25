@@ -232,7 +232,22 @@ export const documentosComplementares = mysqlTable("documentos_complementares", 
 });
 
 export type DocumentoComplementar = typeof documentosComplementares.$inferSelect;
-export type InsertDocumentoComplementar = typeof documentosComplementares.$inferInsert;
+export type InsertDocumentoComplementar = typeof documentosComplementares.$inferSelect;
+
+// ─── Exportações de Dossiê ───────────────────────────────────────────────────
+export const exportacoesDossie = mysqlTable("exportacoes_dossie", {
+  id: int("id").autoincrement().primaryKey(),
+  operacaoId: int("operacaoId").notNull(),
+  userId: int("userId").notNull(),
+  status: mysqlEnum("status", ["completa", "com_pendencias"]).notNull(),
+  zipKey: text("zipKey"),
+  zipUrl: text("zipUrl"),
+  totalDocs: int("totalDocs").default(0).notNull(),
+  pendencias: json("pendencias"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type ExportacaoDossie = typeof exportacoesDossie.$inferSelect;
+export type InsertExportacaoDossie = typeof exportacoesDossie.$inferInsert;
 
 // ─── Análises IA ─────────────────────────────────────────────────────────────
 

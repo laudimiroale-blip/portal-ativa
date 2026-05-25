@@ -451,3 +451,22 @@
 - [x] Etapa 1: adicionar campos "Data de nascimento do cônjuge" e "Profissão do cônjuge" (novos campos no schema e no wizard)
 - [x] Etapa 3: adicionar automaticamente ao checklist os documentos do cônjuge (RG/CPF ou CNH; IRPF declaração + recibo) quando estado civil = Casado ou União Estável
 - [x] Etapa 4: substituir prompt da IA de defesa comercial pelo novo prompt completo (7 seções, regras, estilo, adaptação por produto)
+
+## Pasted_content_24 — Módulo de Distribuição com Exportação de Dossiê
+
+- [x] Tabela `exportacoes_dossie` no schema Drizzle (id, operacaoId, userId, status, zipKey, zipUrl, totalDocs, pendencias, createdAt)
+- [x] Migração Drizzle aplicada ao banco
+- [x] Instalar dependências: pdfkit, archiver (geração de PDF e ZIP server-side)
+- [x] Procedure `distribuicao.exportarDossie`: coletar docs do S3, gerar PDF resumo, montar ZIP, salvar histórico
+- [x] Procedure `distribuicao.listarExportacoes`: histórico de exportações por operação
+- [x] Aba "Distribuição" no DetalheOperacao (visível para Admin e Operacional)
+- [x] Checklist visual de pendências documentais na aba Distribuição
+- [x] Botão "Exportar Operação" com destaque dourado
+- [x] Modal de pendências com "Exportar mesmo assim" e "Cancelar"
+- [x] Barra de progresso com etapas: Coletando → Renomeando → Gerando PDFs → Montando ZIP → Pronto!
+- [x] Download automático do ZIP após montagem
+- [x] Histórico de exportações na aba com data, usuário, status e botão re-exportar
+- [x] Renomeação automática de arquivos (sem acentos, underscore, _01/_02 para duplicatas)
+- [x] Estrutura de pastas no ZIP: 01_Defesa, 02_Resumo, 03_SCR, 04_Cliente, 05_Conjuge, 06_Garantia, 07_PJ
+- [x] PDF 02_Resumo_da_Operacao.pdf com layout profissional (dados operação, cliente, cônjuge, garantia, pendências)
+- [x] Rodapé "Documento gerado pelo Portal Ativa Soluções — uso interno e confidencial"
