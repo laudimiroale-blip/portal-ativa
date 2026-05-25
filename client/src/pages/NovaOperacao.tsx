@@ -467,9 +467,9 @@ function Etapa2DadosOperacao({
           <Select
             value={dados.produto ?? ""}
             onValueChange={(v) => {
-              set("produto", v);
-              // Limpar tipo de garantia ao trocar produto (pode ser incompatível)
-              set("tipoGarantiaDescricao", "");
+              // Atualizar produto e limpar garantia em uma única chamada para evitar sobrescrita
+              onChange({ ...dados, produto: v as any, tipoGarantiaDescricao: "" });
+              if (erros.produto) setErros((e) => ({ ...e, produto: "", tipoGarantiaDescricao: "" }));
             }}
           >
             <SelectTrigger className={cn("bg-background/50", erros.produto && "border-red-500")}>
