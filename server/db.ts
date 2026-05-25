@@ -118,6 +118,7 @@ export async function getOperacoes(filters?: {
   prioridade?: string;
   busca?: string;
   responsavelOperacionalId?: number;
+  categoriaGarantia?: string;
 }) {
   const db = await getDb();
   if (!db) return [];
@@ -127,6 +128,7 @@ export async function getOperacoes(filters?: {
   if (filters?.produto) conditions.push(eq(operacoes.produto, filters.produto as any));
   if (filters?.prioridade) conditions.push(eq(operacoes.prioridade, filters.prioridade as any));
   if (filters?.responsavelOperacionalId) conditions.push(eq(operacoes.responsavelOperacionalId, filters.responsavelOperacionalId));
+  if (filters?.categoriaGarantia) conditions.push(eq(operacoes.categoriaGarantia, filters.categoriaGarantia as any));
   if (filters?.busca) {
     const busca = `%${filters.busca}%`;
     const orClause = or(

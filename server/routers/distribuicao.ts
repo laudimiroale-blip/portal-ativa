@@ -361,6 +361,48 @@ export const distribuicaoRouter = router({
       return { success: true, zipUrl, pendencias, requerConfirmacao: false };
     }),
 
+
+  // ─── Preview do PDF do Resumo ─────────────────────────────────────────────
+  gerarPdfPreview: protectedProcedure
+    .input(z.object({ operacaoId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const [op] = await db
+        .select()
+        .from(operacoes)
+        .where(and(eq(operacoes.id, input.operacaoId), isNull(operacoes.deletedAt)));
+      if (!op) throw new TRPCError({ code: "NOT_FOUND", message: "Operação não encontrada" });
+
+      const [consultor] = await db.select({ id: users.id, nome: users.name }).from(users).where(eq(users.id, op.assessorId));
+      const opComConsultor = { ...op, consultor };
+
+      const docs = await db
+        .select()
+        .from(documentos)
+        .where(and(eq(documentos.operacaoId, input.operacaoId), isNull(documentos.deletedAt)));
+
+      const docsPendentes = docs.filter(
+        (d) => !d.naoAplicavel && !d.opcional && (d.estado === "Pendente" || d.estado === "Reprovado" || d.estado === "Ilegível"),
+      );
+      const pendencias = docsPendentes.map((d) => d.nomeDocumento);
+
+      const [garantia] = await db
+        .select()
+        .from(garantias)
+        .where(and(eq(garantias.operacaoId, input.operacaoId), isNull(garantias.deletedAt)));
+
+      // Gerar PDF do resumo
+      const pdfBuffer = await gerarPdfResumo(opComConsultor, garantia, pendencias);
+
+      // Salvar no S3 como arquivo temporário de preview
+      const nomeCliente = sanitizeName(op.nomeCliente.split(" ").slice(0, 2).join("_"));
+      const ts = Date.now();
+      const pdfKey = `previews/Resumo_${nomeCliente}_${ts}.pdf`;
+      const { url: pdfUrl } = await storagePut(pdfKey, pdfBuffer, "application/pdf");
+
+      return { pdfUrl, pendencias };
+    }),
+
   // ─── Listar Exportações ───────────────────────────────────────────────────
   listarExportacoes: protectedProcedure
     .input(z.object({ operacaoId: z.number() }))

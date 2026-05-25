@@ -166,6 +166,7 @@ export const operacoesRouter = router({
       apenasMinhas: z.boolean().optional(),
       responsavelOperacionalId: z.number().optional(),
       assessorId: z.number().optional(),
+      categoriaGarantia: z.enum(["Residencial","Comercial","Rural","Veicular","Construção"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const user = ctx.user as any;
@@ -176,6 +177,7 @@ export const operacoesRouter = router({
         prioridade: input?.prioridade,
         busca: input?.busca,
         responsavelOperacionalId: input?.responsavelOperacionalId,
+        categoriaGarantia: input?.categoriaGarantia,
       };
       if (!isAdmin || input?.apenasMinhas) {
         filters.assessorId = user.id;

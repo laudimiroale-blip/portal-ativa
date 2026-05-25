@@ -18,6 +18,19 @@ const STATUS_OPTIONS = [
 
 const PRODUTO_OPTIONS = [...PRODUTOS];
 const PRIORIDADE_OPTIONS = ["Urgente", "Alta", "Normal", "Baixa"];
+const CATEGORIA_GARANTIA_OPTIONS = ["Residencial", "Comercial", "Rural", "Veicular", "Construção"] as const;
+const STATUS_DOC_OPTIONS: { value: string; label: string }[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "enviado", label: "Enviado" },
+  { value: "em_analise", label: "Em análise" },
+  { value: "aprovado", label: "Aprovado" },
+  { value: "reprovado", label: "Reprovado" },
+  { value: "expirado", label: "Expirado" },
+  { value: "ilegivel", label: "Ilegível" },
+  { value: "incompleto", label: "Incompleto" },
+  { value: "nao_aplicavel", label: "N/A" },
+  { value: "aguardando_assinatura", label: "Ag. Assinatura" },
+];
 
 export default function Operacoes() {
   const { user } = useAuth();
@@ -27,6 +40,8 @@ export default function Operacoes() {
   const [statusFiltro, setStatusFiltro] = useState("");
   const [produtoFiltro, setProdutoFiltro] = useState("");
   const [prioridadeFiltro, setPrioridadeFiltro] = useState("");
+  const [categoriaGarantiaFiltro, setCategoriaGarantiaFiltro] = useState("");
+  const [statusDocFiltro, setStatusDocFiltro] = useState("");
   const [apenasMinhas, setApenasMinhas] = useState(!isAdmin);
   const [showFilters, setShowFilters] = useState(false);
   const [mostrarArquivadas, setMostrarArquivadas] = useState(false);
@@ -73,22 +88,34 @@ export default function Operacoes() {
     produto: produtoFiltro || undefined,
     prioridade: prioridadeFiltro || undefined,
     apenasMinhas: !isAdmin ? true : apenasMinhas,
+    categoriaGarantia: (categoriaGarantiaFiltro as any) || undefined,
   });
 
   // Filtrar arquivadas: por padrão ocultar, a menos que filtro explícito ou toggle ativo
-  const operacoes = useMemo(() => {
+  const operacoesBase = useMemo(() => {
     if (!operacoesRaw) return [];
     if (mostrarArquivadas || statusFiltro === "Arquivada") return operacoesRaw;
     return operacoesRaw.filter((op: any) => op.statusMacro !== "Arquivada");
   }, [operacoesRaw, mostrarArquivadas, statusFiltro]);
 
-  const hasFilters = !!(busca || statusFiltro || produtoFiltro || prioridadeFiltro);
+  // Filtro client-side por status de documento
+  const operacoes = useMemo(() => {
+    if (!statusDocFiltro) return operacoesBase;
+    return operacoesBase.filter((op: any) => {
+      if (!op.documentos || op.documentos.length === 0) return false;
+      return op.documentos.some((doc: any) => doc.status === statusDocFiltro);
+    });
+  }, [operacoesBase, statusDocFiltro]);
+
+  const hasFilters = !!(busca || statusFiltro || produtoFiltro || prioridadeFiltro || categoriaGarantiaFiltro || statusDocFiltro);
 
   const clearFilters = () => {
     setBusca("");
     setStatusFiltro("");
     setProdutoFiltro("");
     setPrioridadeFiltro("");
+    setCategoriaGarantiaFiltro("");
+    setStatusDocFiltro("");
   };
 
   return (
@@ -147,7 +174,7 @@ export default function Operacoes() {
         {/* Filtros avançados */}
         {showFilters && (
           <div className="card-premium p-4 rounded-lg space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Status</label>
                 <select
@@ -184,6 +211,32 @@ export default function Operacoes() {
                   <option value="">Todas as prioridades</option>
                   {PRIORIDADE_OPTIONS.map((p) => (
                     <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Categoria da Garantia</label>
+                <select
+                  value={categoriaGarantiaFiltro}
+                  onChange={(e) => setCategoriaGarantiaFiltro(e.target.value)}
+                  className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-foreground focus:outline-none focus:border-primary/50"
+                >
+                  <option value="">Todas as categorias</option>
+                  {CATEGORIA_GARANTIA_OPTIONS.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Status do Documento</label>
+                <select
+                  value={statusDocFiltro}
+                  onChange={(e) => setStatusDocFiltro(e.target.value)}
+                  className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm text-foreground focus:outline-none focus:border-primary/50"
+                >
+                  <option value="">Todos os status de doc.</option>
+                  {STATUS_DOC_OPTIONS.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
                 </select>
               </div>

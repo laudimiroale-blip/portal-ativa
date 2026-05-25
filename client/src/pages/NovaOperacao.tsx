@@ -227,6 +227,7 @@ export default function NovaOperacao({ params }: NovaOperacaoProps = {}) {
               codigoOperacao={codigoOperacao}
               operacaoId={operacaoId ?? 0}
               dadosOperacao={dadosOperacao}
+              dadosCliente={dadosCliente}
               onBack={() => setEtapa(3)}
               onNext={() => setEtapa(5)}
             />
@@ -1979,16 +1980,74 @@ function Etapa3Documentos({
 
 // ─── Etapa 4: Resumo + Defesa Comercial ───────────────────────────────────────
 
+// Gera um resumo estruturado a partir dos dados das etapas 1-3 (sem IA)
+function gerarResumoPreliminar(dadosCliente: Partial<DadosCliente>, dadosOperacao: Partial<DadosOperacao>): string {
+  const linhas: string[] = [];
+
+  // Cabeçalho com produto e cliente
+  const produto = dadosOperacao.produto ?? "";
+  const nome = dadosCliente.nomeCliente ?? "";
+  if (produto || nome) {
+    linhas.push(`Operação de ${produto}${nome ? ` para ${nome}` : ""}.`);
+  }
+
+  // Dados pessoais
+  const pessoais: string[] = [];
+  if (dadosCliente.estadoCivil) pessoais.push(`Estado civil: ${dadosCliente.estadoCivil}`);
+  if (dadosCliente.origemRenda) pessoais.push(`Origem da renda: ${dadosCliente.origemRenda}`);
+  if (pessoais.length > 0) linhas.push(pessoais.join(" | "));
+
+  // Cônjuge
+  const exigeConjuge = dadosCliente.estadoCivil === "Casado" || dadosCliente.estadoCivil === "União Estável";
+  if (exigeConjuge && dadosCliente.nomeConjuge) {
+    const conjuge: string[] = [`Cônjuge: ${dadosCliente.nomeConjuge}`];
+    if (dadosCliente.profissaoConjuge) conjuge.push(`profissão: ${dadosCliente.profissaoConjuge}`);
+    linhas.push(conjuge.join(", ") + ".");
+  }
+
+  // Dados financeiros
+  const financeiro: string[] = [];
+  if (dadosOperacao.valorSolicitado) {
+    const valorNum = parseFloat(dadosOperacao.valorSolicitado.replace(/[^\d.,]/g, "").replace(",", "."));
+    if (!isNaN(valorNum)) financeiro.push(`Valor solicitado: ${valorNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`);
+  }
+  if (dadosOperacao.prazo) financeiro.push(`Prazo: ${dadosOperacao.prazo} meses`);
+  if (dadosOperacao.finalidadePrincipal) financeiro.push(`Finalidade: ${dadosOperacao.finalidadePrincipal}`);
+  if (financeiro.length > 0) linhas.push(financeiro.join(" | ") + ".");
+
+  // Garantia
+  const garantia: string[] = [];
+  if (dadosOperacao.tipoGarantiaDescricao) garantia.push(`Garantia: ${dadosOperacao.tipoGarantiaDescricao}`);
+  if (dadosOperacao.categoriaGarantia) garantia.push(`categoria ${dadosOperacao.categoriaGarantia}`);
+  if (dadosOperacao.valorGarantia) {
+    const vg = parseFloat(dadosOperacao.valorGarantia.replace(/[^\d.,]/g, "").replace(",", "."));
+    if (!isNaN(vg)) garantia.push(`valor aprox. ${vg.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`);
+  }
+  if (dadosOperacao.garantiaQuitada) garantia.push(dadosOperacao.garantiaQuitada);
+  if (dadosOperacao.dividaAtual) {
+    const dv = parseFloat(dadosOperacao.dividaAtual.replace(/[^\d.,]/g, "").replace(",", "."));
+    if (!isNaN(dv) && dv > 0) garantia.push(`dívida atual: ${dv.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`);
+  }
+  if (garantia.length > 0) linhas.push(garantia.join(", ") + ".");
+
+  // Contexto adicional
+  if (dadosOperacao.finalidade) linhas.push(`Finalidade detalhada: ${dadosOperacao.finalidade}`);
+
+  return linhas.join("\n");
+}
+
 function Etapa4ResumoDefesa({
   codigoOperacao,
   operacaoId: operacaoIdProp,
   dadosOperacao,
+  dadosCliente,
   onBack,
   onNext,
 }: {
   codigoOperacao: string;
   operacaoId: number;
   dadosOperacao: Partial<DadosOperacao>;
+  dadosCliente: Partial<DadosCliente>;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -2020,7 +2079,12 @@ function Etapa4ResumoDefesa({
   const [gerandoResumo, setGerandoResumo] = useState(false);
   const gerarResumoMutation = trpc.ia.gerarResumoInteligente.useMutation();
   const resumoExistente = (op as any)?.resumoInteligente as string | null;
-  const resumoAtual = resumoLocal ?? resumoExistente ?? "";
+  // Auto-preencher resumo com dados das etapas 1-3 quando não há resumo salvo nem local
+  const resumoPreliminar = React.useMemo(
+    () => gerarResumoPreliminar(dadosCliente, dadosOperacao),
+    [dadosCliente, dadosOperacao]
+  );
+  const resumoAtual = resumoLocal ?? resumoExistente ?? resumoPreliminar;
 
   const handleGerarResumo = async () => {
     if (!operacaoId) return;
@@ -2204,7 +2268,11 @@ function Etapa4ResumoDefesa({
           <div className="flex items-center gap-2">
             <FileText className="w-3.5 h-3.5 text-primary" />
             <h3 className="text-sm font-semibold text-foreground">Resumo Inteligente da Operação</h3>
-            {resumoAtual && <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">Disponível</span>}
+            {(resumoLocal ?? resumoExistente) ? (
+              <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">Gerado por IA</span>
+            ) : resumoPreliminar ? (
+              <span className="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">Pré-preenchido</span>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             {resumoAtual && (
@@ -2213,8 +2281,8 @@ function Etapa4ResumoDefesa({
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={handleGerarResumo} disabled={gerandoResumo || !operacaoId} className="gap-1.5 text-xs">
-              {gerandoResumo ? <Loader2 className="w-3 h-3 animate-spin" /> : resumoAtual ? <RefreshCw className="w-3 h-3" /> : <Bot className="w-3 h-3" />}
-              {resumoAtual ? "Regenerar" : "Gerar com IA"}
+              {gerandoResumo ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+              {gerandoResumo ? "Gerando..." : (resumoLocal ?? resumoExistente) ? "Regenerar com IA" : "Gerar com IA"}
             </Button>
           </div>
         </div>

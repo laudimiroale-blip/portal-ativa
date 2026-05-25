@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Clock,
   Download,
+  Eye,
   FileText,
   History,
   Info,
@@ -1266,6 +1267,20 @@ function TabDistribuicao({ operacaoId, operacao }: { operacaoId: number; operaca
 
   const { data: exportacoes, refetch: refetchExportacoes } = trpc.distribuicao.listarExportacoes.useQuery({ operacaoId });
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [gerandoPreview, setGerandoPreview] = useState(false);
+  const previewMutation = trpc.distribuicao.gerarPdfPreview.useMutation({
+    onSuccess: (data) => {
+      setPreviewUrl(data.pdfUrl);
+      setPreviewOpen(true);
+      setGerandoPreview(false);
+    },
+    onError: (err) => {
+      setGerandoPreview(false);
+      toast.error("Erro ao gerar preview: " + err.message);
+    },
+  });
   const exportarMutation = trpc.distribuicao.exportarDossie.useMutation({
     onSuccess: (data) => {
       if (data.requerConfirmacao && data.pendencias.length > 0) {
@@ -1338,18 +1353,32 @@ function TabDistribuicao({ operacaoId, operacao }: { operacaoId: number; operaca
             Gera um arquivo ZIP com todos os documentos organizados em pastas, PDF de resumo e defesa de crédito.
           </p>
         </div>
-        <button
-          onClick={() => iniciarExportacao(false)}
-          disabled={exportando}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
-            "bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20",
-            "disabled:opacity-60 disabled:cursor-not-allowed",
-          )}
-        >
-          {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
-          {exportando ? "Exportando..." : "Exportar Operação"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setGerandoPreview(true); previewMutation.mutate({ operacaoId }); }}
+            disabled={exportando || gerandoPreview}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
+              "bg-card border border-border hover:border-amber-500/50 text-foreground",
+              "disabled:opacity-60 disabled:cursor-not-allowed",
+            )}
+          >
+            {gerandoPreview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4 text-amber-400" />}
+            {gerandoPreview ? "Gerando..." : "Preview PDF"}
+          </button>
+          <button
+            onClick={() => iniciarExportacao(false)}
+            disabled={exportando}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
+              "bg-amber-500 hover:bg-amber-400 text-black shadow-lg shadow-amber-500/20",
+              "disabled:opacity-60 disabled:cursor-not-allowed",
+            )}
+          >
+            {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
+            {exportando ? "Exportando..." : "Exportar Operação"}
+          </button>
+        </div>
       </div>
 
       {/* Aviso se não está pronta */}

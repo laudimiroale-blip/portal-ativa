@@ -479,3 +479,9 @@
 - [x] Item 4: Campo "Origem da renda" (select obrigatório) na Etapa 1; controla checklist de documentos dinamicamente
 - [x] Item 5: Botão "Gerar Resumo Inteligente" na Etapa 4; IA gera parágrafo de 3 linhas editável; incluso no dossiê ZIP
 - [x] Item 6: Status avançado por documento (10 status: Pendente, Enviado, Em Análise, Validado, Aprovado, Reprovado, Pendência encontrada, Ilegível, Vencido, Reenviar); badge colorido; alteração manual pelo admin; IA classifica automaticamente
+
+## 3 Melhorias — Dossiê, Filtros e Resumo Inteligente
+
+- [x] Melhoria 1: Modal de preview do PDF do dossiê antes do download do ZIP (procedure `distribuicao.gerarPdfPreview` retorna URL do PDF; modal com iframe/embed)
+- [x] Melhoria 2: Filtros no painel de operações por status de documento (tem pendente/aprovado/reprovado) e por categoria de garantia (Residencial/Comercial/Rural/Veicular)
+- [x] Melhoria 3: Resumo Inteligente pré-preenchido automaticamente com dados das etapas 1-3 antes da edição manual (sem chamar IA — apenas template estruturado)
